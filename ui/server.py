@@ -25,6 +25,7 @@ from core.input_channel import normalize_input
 from core.registry import SkillRegistry
 from core.router import Router
 from core.status_events import StatusEvent, broadcaster
+from core.usage import get_today_percent
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +136,7 @@ def get_status() -> dict:
         "engineStatus": _check_engine(),
         "activeSkills": [s.name for s in _registry.get_all_skills()],
         "systemInfo": _system_info(),
-        "usageToday": None,
+        "usageToday": get_today_percent(),
     }
 
 

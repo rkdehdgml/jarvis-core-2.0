@@ -12,7 +12,7 @@
   user-select: none;
   cursor: pointer;
   overflow: hidden;
-  width: 220px;
+  width: min(220px, calc(100vw - 32px));
 }
 
 .jarvis-minimal__header {

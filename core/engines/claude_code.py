@@ -1,7 +1,10 @@
+import json
 import logging
 import os
 import subprocess
 from pathlib import Path
+
+from core import usage
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +50,11 @@ class ClaudeCodeEngine:
 
         try:
             result = subprocess.run(
-                ["claude", "-p", prompt],
+                ["claude", "-p", prompt, "--output-format", "json"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=self._timeout,
                 env=self._build_env(),
             )
@@ -67,12 +72,29 @@ class ClaudeCodeEngine:
             logger.error(f"Claude Code 비정상 종료 (code={result.returncode}): {result.stderr}")
             return "AI 응답을 받지 못했습니다."
 
-        response = result.stdout.strip()
+        response = self._extract_response(result.stdout)
         if not response:
             logger.warning("Claude Code 응답이 비어 있습니다.")
             return "응답이 비어 있습니다."
 
         return response
+
+    def _extract_response(self, stdout: str) -> str:
+        """--output-format json 결과에서 응답 텍스트를 꺼내고, 호출 비용을 기록한다.
+
+        JSON 파싱에 실패하면(예: CLI 버전 차이) 원문을 그대로 응답으로 쓴다.
+        """
+        try:
+            data = json.loads(stdout)
+        except json.JSONDecodeError:
+            logger.warning("Claude Code JSON 응답 파싱 실패, 원문을 그대로 사용합니다.")
+            return stdout.strip()
+
+        cost_usd = data.get("total_cost_usd")
+        if isinstance(cost_usd, (int, float)):
+            usage.record_cost(cost_usd)
+
+        return str(data.get("result", "")).strip()
 
     def _build_prompt(self, text: str) -> str:
         if self._persona:

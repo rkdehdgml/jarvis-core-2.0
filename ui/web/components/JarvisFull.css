@@ -22,10 +22,17 @@
 
 .jarvis-full__grid {
   display: grid;
-  grid-template-columns: 220px 1fr 220px;
+  grid-template-columns: minmax(140px, 220px) minmax(0, 1fr) minmax(140px, 220px);
   align-items: center;
   gap: 16px;
   padding: 24px 0;
+}
+
+@media (max-width: 720px) {
+  .jarvis-full__grid {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
 }
 
 .jarvis-full__panel {
@@ -68,8 +75,8 @@
 
 .jarvis-full__rings {
   position: relative;
-  width: 180px;
-  height: 180px;
+  width: clamp(120px, 30vmin, 180px);
+  height: clamp(120px, 30vmin, 180px);
 }
 
 .jarvis-full__ring {
@@ -118,7 +125,7 @@
   left: 50%;
   transform: translate(-50%, -50%);
   text-align: center;
-  width: 140px;
+  width: 78%;
 }
 
 .jarvis-full__core-main {
@@ -232,6 +239,16 @@
   }
   50% {
     height: 90%;
+  }
+}
+
+@media (max-width: 480px) {
+  .jarvis-full {
+    padding: 12px;
+  }
+
+  .jarvis-full__bubble {
+    max-width: 85%;
   }
 }
 

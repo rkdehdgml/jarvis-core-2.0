@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { useJarvisStatus, type JarvisState } from "../hooks/useJarvisStatus";
+import { useMicLevels } from "../hooks/useMicLevels";
 import { ChatInput } from "./ChatInput";
 import "./JarvisFull.css";
 
@@ -8,7 +9,7 @@ const CORE_TEXT: Record<JarvisState, { main: string; sub: string }> = {
   idle: { main: "대기 중", sub: "STANDBY" },
   listening: { main: "듣고 있습니다", sub: "LISTENING" },
   processing: { main: "처리 중...", sub: "PROCESSING" },
-  responded: { main: "", sub: "DONE" },
+  responded: { main: "응답 완료", sub: "DONE" },
 };
 
 const WAVE_BAR_COUNT = 24;
@@ -35,12 +36,9 @@ function useClock(): string {
 export function JarvisFull() {
   const status = useJarvisStatus();
   const clock = useClock();
+  const micLevels = useMicLevels(status.currentState === "listening", WAVE_BAR_COUNT);
 
   const coreText = CORE_TEXT[status.currentState];
-  const coreMain =
-    status.currentState === "responded"
-      ? status.lastResponse ?? "대기 중"
-      : coreText.main;
 
   return (
     <div className="jarvis-full">
@@ -80,7 +78,7 @@ export function JarvisFull() {
               className={`jarvis-full__ring jarvis-full__ring--inner jarvis-full__ring--${status.currentState}`}
             />
             <div className="jarvis-full__core-text">
-              <div className="jarvis-full__core-main">{coreMain}</div>
+              <div className="jarvis-full__core-main">{coreText.main}</div>
               <div className="jarvis-full__core-sub">{coreText.sub}</div>
             </div>
           </div>
@@ -107,15 +105,27 @@ export function JarvisFull() {
       </div>
 
       <div className="jarvis-full__waveform">
-        {Array.from({ length: WAVE_BAR_COUNT }, (_, i) => (
-          <div
-            key={i}
-            className={`jarvis-full__wave-bar${
-              status.currentState === "listening" ? " jarvis-full__wave-bar--listening" : ""
-            }`}
-            style={{ animationDelay: `${i * 0.05}s` }}
-          />
-        ))}
+        {Array.from({ length: WAVE_BAR_COUNT }, (_, i) => {
+          const level = micLevels[i];
+          if (level !== undefined) {
+            return (
+              <div
+                key={i}
+                className="jarvis-full__wave-bar"
+                style={{ height: `${Math.max(10, level * 100)}%`, animation: "none" }}
+              />
+            );
+          }
+          return (
+            <div
+              key={i}
+              className={`jarvis-full__wave-bar${
+                status.currentState === "listening" ? " jarvis-full__wave-bar--listening" : ""
+              }`}
+              style={{ animationDelay: `${i * 0.05}s` }}
+            />
+          );
+        })}
       </div>
 
       <div className="jarvis-full__log">

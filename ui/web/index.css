@@ -1,0 +1,26 @@
+body {
+  margin: 0;
+}
+
+.app-shell {
+  background: #03060c;
+}
+
+.mode-switch-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 12px;
+  background: #03060c;
+  border-bottom: 1px solid #2dd4ee22;
+}
+
+.mode-switch {
+  background: #0a1420;
+  color: #2dd4ee;
+  border: 1px solid #2dd4ee66;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-family: "JetBrains Mono", "Consolas", monospace;
+  font-size: 11px;
+  cursor: pointer;
+}

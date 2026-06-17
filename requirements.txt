@@ -6,6 +6,9 @@ faster-whisper>=1.0.0
 edge-tts>=6.1.0
 sounddevice>=0.4.6
 numpy>=1.24.0
+pygame>=2.5.0           # tts 합성 결과(mp3) 재생
+torch>=2.0.0            # silero-vad 추론용
+silero-vad>=5.1
 
 # STEP 8 — 핫워드
 openwakeword>=0.6.0

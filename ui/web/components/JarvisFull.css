@@ -1,5 +1,5 @@
 .jarvis-full {
-  min-height: 100vh;
+  height: 100%;
   background: #03060c;
   color: #e6f7fb;
   font-family: "JetBrains Mono", "Consolas", monospace;
@@ -7,6 +7,7 @@
   flex-direction: column;
   padding: 16px 24px;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .jarvis-full__topbar {
@@ -21,6 +22,7 @@
 }
 
 .jarvis-full__grid {
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: minmax(140px, 220px) minmax(0, 1fr) minmax(140px, 220px);
   align-items: center;
@@ -32,6 +34,32 @@
   .jarvis-full__grid {
     grid-template-columns: 1fr;
     justify-items: center;
+  }
+}
+
+.jarvis-full__chat-area {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) minmax(0, 1fr) minmax(140px, 220px);
+  gap: 16px;
+}
+
+.jarvis-full__chat-col {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .jarvis-full__chat-area {
+    grid-template-columns: 1fr;
+  }
+
+  .jarvis-full__chat-col {
+    grid-column: 1;
   }
 }
 
@@ -50,6 +78,13 @@
 
 .jarvis-full__panel-row span:last-child {
   color: #e6f7fb;
+}
+
+.jarvis-full__panel-model {
+  font-size: 10px;
+  color: #6b8e99;
+  word-break: break-all;
+  margin-top: -6px;
 }
 
 .jarvis-full__gauge {
@@ -143,6 +178,7 @@
 }
 
 .jarvis-full__waveform {
+  flex-shrink: 0;
   display: flex;
   align-items: flex-end;
   gap: 3px;
@@ -156,7 +192,6 @@
   background: #2dd4ee;
   border-radius: 2px;
   height: 20%;
-  animation: jarvis-full-wave-idle 2.4s ease-in-out infinite;
 }
 
 .jarvis-full__wave-bar--listening {
@@ -166,11 +201,27 @@
 .jarvis-full__log {
   flex: 1;
   overflow-y: auto;
+  scroll-behavior: smooth;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 8px 0;
   min-height: 0;
+  scrollbar-color: #03060c transparent;
+  scrollbar-width: thin;
+}
+
+.jarvis-full__log::-webkit-scrollbar {
+  width: 6px;
+}
+
+.jarvis-full__log::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.jarvis-full__log::-webkit-scrollbar-thumb {
+  background: #03060c;
+  border-radius: 4px;
 }
 
 .jarvis-full__bubble {
@@ -222,16 +273,6 @@
   }
 }
 
-@keyframes jarvis-full-wave-idle {
-  0%,
-  100% {
-    height: 15%;
-  }
-  50% {
-    height: 30%;
-  }
-}
-
 @keyframes jarvis-full-wave-active {
   0%,
   100% {
@@ -256,5 +297,9 @@
   .jarvis-full__ring,
   .jarvis-full__wave-bar {
     animation: none;
+  }
+
+  .jarvis-full__log {
+    scroll-behavior: auto;
   }
 }

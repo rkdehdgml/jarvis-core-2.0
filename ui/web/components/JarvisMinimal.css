@@ -90,6 +90,7 @@
   gap: 8px;
   max-height: 220px;
   overflow-y: auto;
+  scroll-behavior: smooth;
 }
 
 .jarvis-minimal__row {
@@ -136,5 +137,9 @@
 @media (prefers-reduced-motion: reduce) {
   .jarvis-minimal__ring {
     animation: none;
+  }
+
+  .jarvis-minimal__panel {
+    scroll-behavior: auto;
   }
 }

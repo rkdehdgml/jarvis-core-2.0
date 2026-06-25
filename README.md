@@ -32,6 +32,32 @@ python main.py --text
 deactivate
 ```
 
+## 웹 대시보드 실행
+
+음성/텍스트 루프(`main.py`)와는 별개의 독립 프로세스입니다. 두 프로세스는 상태를 공유하지 않습니다.
+
+```powershell
+uvicorn ui.server:app --host 127.0.0.1 --port 8765
+```
+
+### 프론트엔드 (ui/web)
+
+```powershell
+cd ui\web
+npm install
+npm run dev         # Vite 개발 서버, http://localhost:5173
+npm run build        # tsc -b && vite build
+npm run typecheck    # tsc --noEmit
+```
+
+## 테스트 실행
+
+pytest는 사용하지 않습니다. `tests/` 아래 assert 기반 스크립트를 모듈로 직접 실행합니다.
+
+```powershell
+python -m tests.test_skills_step5
+```
+
 ## 프로젝트 구조
 
 ```

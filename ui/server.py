@@ -11,7 +11,6 @@ main.py 와 같은 프로세스에서 띄우려면 main.py 에서 uvicorn.Server
 """
 import asyncio
 import logging
-import shutil
 from contextlib import asynccontextmanager
 
 import psutil
@@ -19,14 +18,13 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from core import chat_history
 from core.context import ConversationContext
 from core.dispatcher import Dispatcher
 from core.input_channel import normalize_input
 from core.registry import SkillRegistry
 from core.router import Router
 from core.status_events import StatusEvent, broadcaster
-from core.usage import get_today_percent
-from ui import chat_history
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +54,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     speech: str
     success: bool
+    cleared: bool = False
 
 
 class HistoryTurn(BaseModel):
@@ -71,19 +70,33 @@ def _event_to_dict(event: StatusEvent) -> dict:
     프론트엔드가 페이지 로드 시 한 번만 동기적으로 받던 값을, 모든 push마다
     (상태 변화든 주기적 틱이든) 최신값으로 비동기 갱신할 수 있게 하기 위함.
     """
+    descriptor = _engine_descriptor()
     return {
         "state": event.state,
         "lastResponse": event.last_response,
         "timestamp": event.timestamp,
-        "engineStatus": _check_engine(),
+        "engineInfo": {
+            "provider": descriptor["provider"],
+            "model": descriptor["model"],
+            "connected": descriptor["connected"],
+        },
         "systemInfo": _system_info(),
-        "usageToday": get_today_percent(),
+        "usageToday": descriptor["usagePercent"],
     }
 
 
-def _check_engine() -> bool:
-    """Claude Code CLI가 PATH에서 발견되는지로 엔진 연결 여부를 판단한다."""
-    return shutil.which("claude") is not None
+def _engine_descriptor() -> dict:
+    """ai_chat 스킬이 실제로 쓰고 있는 엔진(GroqEngine 또는 ClaudeCodeEngine)의
+    describe()를 가져온다. 어느 엔진이 활성인지는 skill_ai_chat.py의 import
+    한 줄로 결정되므로, 여기서는 그 결과만 그대로 중계한다.
+    """
+    for skill in _registry.get_all_skills():
+        if skill.name == "ai_chat":
+            engine = getattr(skill, "_engine", None)
+            if engine is not None and hasattr(engine, "describe"):
+                return engine.describe()
+            break
+    return {"provider": "알 수 없음", "model": "-", "connected": False, "usagePercent": 0}
 
 
 def _system_info() -> dict:
@@ -173,7 +186,19 @@ def get_status() -> dict:
     }
 
 
+_CLEAR_COMMAND = "/clear"
+
+
 def _handle_chat(text: str) -> ChatResponse:
+    if text.strip().lower() == _CLEAR_COMMAND:
+        # 스킬 라우팅을 거치지 않고 바로 처리한다 — Dispatcher를 타면
+        # broadcaster.emit(state="responded", ...)이 같이 발생해 WebSocket으로도
+        # "지웠습니다" 턴이 push되면서, 지금 막 비운 conversationLog에 그 턴이
+        # 다시 쌓이는 경쟁 상태가 생긴다. 그래서 이 명령은 라우터 이전에 가로챈다.
+        _chat_context.clear()
+        chat_history.clear_history()
+        return ChatResponse(speech="대화 기록을 지웠습니다.", success=True, cleared=True)
+
     event = normalize_input(text, channel="chat")
     skill = _router.route(event.text)
     result = _dispatcher.dispatch(skill, event.text, _chat_context, channel=event.channel)

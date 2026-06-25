@@ -8,7 +8,7 @@ class WindowSkill(Skill):
 
     name = "window"
     description = "창을 최소화/전체화면/정렬한다"
-    triggers = ["창", "최소화", "정렬"]
+    triggers = ["최소화", "정렬", "전체 화면"]
     examples = ["창 최소화", "전체 화면", "창 정렬해줘"]
 
     def can_handle(self, intent: str, text: str) -> float:
@@ -18,8 +18,6 @@ class WindowSkill(Skill):
             return 0.9
         if "전체" in text and "화면" in text:
             return 0.85
-        if "창" in text:
-            return 0.5
         return 0.0
 
     def execute(self, text: str, context: dict) -> SkillResult:

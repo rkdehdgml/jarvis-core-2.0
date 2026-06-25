@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useJarvisStatus } from "../hooks/useJarvisStatus";
 import "./JarvisMinimal.css";
@@ -25,8 +25,17 @@ export function JarvisMinimal() {
   const [expanded, setExpanded] = useState(false);
   const [mode, setMode] = useState<"voice" | "chat">("chat");
   const status = useJarvisStatus();
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const recentLog = status.conversationLog.slice(-5);
+
+  // 패널이 펼쳐진 상태에서 새 발화/응답이 추가되면 그쪽으로 스크롤 이동.
+  useEffect(() => {
+    const el = panelRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [status.conversationLog, expanded]);
 
   return (
     <div className="jarvis-minimal" onClick={() => setExpanded((v) => !v)}>
@@ -52,10 +61,12 @@ export function JarvisMinimal() {
       </div>
 
       {expanded && (
-        <div className="jarvis-minimal__panel" onClick={(e) => e.stopPropagation()}>
+        <div className="jarvis-minimal__panel" ref={panelRef} onClick={(e) => e.stopPropagation()}>
           <div className="jarvis-minimal__row">
-            <span>엔진 연결</span>
-            <span>{status.engineStatus ? "정상" : "끊김"}</span>
+            <span>엔진</span>
+            <span>
+              {status.engineInfo.connected ? status.engineInfo.provider : "연결 끊김"}
+            </span>
           </div>
 
           <div className="jarvis-minimal__row">

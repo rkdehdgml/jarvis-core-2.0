@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -118,6 +119,20 @@ class ClaudeCodeEngine:
 
     def _build_env(self) -> dict:
         return {k: v for k, v in os.environ.items() if k in _ENV_WHITELIST}
+
+    def describe(self) -> dict:
+        """UI(엔진/사용량 패널)에 보여줄 엔진 식별 정보. GroqEngine.describe()와 짝을 이룬다.
+
+        claude -p는 --model을 지정하지 않으므로 실제 모델은 CLI 쪽 기본 설정에
+        따라 달라진다 — 그래서 model 필드는 구체적인 모델명이 아니라 "Claude Code
+        CLI"로 둔다.
+        """
+        return {
+            "provider": "Claude Code",
+            "model": "Claude Code CLI",
+            "connected": shutil.which("claude") is not None,
+            "usagePercent": usage.get_today_percent(),
+        }
 
     def _load_persona(self) -> str:
         try:

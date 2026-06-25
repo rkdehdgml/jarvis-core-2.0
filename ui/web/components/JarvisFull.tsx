@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useJarvisStatus, type JarvisState } from "../hooks/useJarvisStatus";
 import { useMicLevels } from "../hooks/useMicLevels";
@@ -37,8 +37,17 @@ export function JarvisFull() {
   const status = useJarvisStatus();
   const clock = useClock();
   const micLevels = useMicLevels(status.currentState === "listening", WAVE_BAR_COUNT);
+  const logRef = useRef<HTMLDivElement>(null);
 
   const coreText = CORE_TEXT[status.currentState];
+
+  // 채팅/음성 어느 쪽이든 새 발화나 응답이 conversationLog에 추가되면 그쪽으로 포커스(스크롤) 이동.
+  useEffect(() => {
+    const el = logRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [status.conversationLog]);
 
   return (
     <div className="jarvis-full">
@@ -51,8 +60,9 @@ export function JarvisFull() {
         <div className="jarvis-full__panel">
           <div className="jarvis-full__panel-row">
             <span>엔진</span>
-            <span>{status.engineStatus ? "연결됨" : "끊김"}</span>
+            <span>{status.engineInfo.connected ? status.engineInfo.provider : "연결 끊김"}</span>
           </div>
+          <div className="jarvis-full__panel-model">{status.engineInfo.model}</div>
           <div className="jarvis-full__panel-row">
             <span>사용량</span>
             <span>{status.usageToday !== null ? `${status.usageToday}%` : "—"}</span>
@@ -97,51 +107,51 @@ export function JarvisFull() {
               {status.systemInfo ? `${status.systemInfo.memoryPercent.toFixed(0)}%` : "—"}
             </span>
           </div>
-          <div className="jarvis-full__panel-row">
-            <span>마지막 응답</span>
-            <span>{status.lastResponse ?? "—"}</span>
-          </div>
         </div>
       </div>
 
-      <div className="jarvis-full__waveform">
-        {Array.from({ length: WAVE_BAR_COUNT }, (_, i) => {
-          const level = micLevels[i];
-          if (level !== undefined) {
-            return (
+      <div className="jarvis-full__chat-area">
+        <div className="jarvis-full__chat-col">
+          {status.currentState === "listening" && (
+            <div className="jarvis-full__waveform">
+              {Array.from({ length: WAVE_BAR_COUNT }, (_, i) => {
+                const level = micLevels[i];
+                if (level !== undefined) {
+                  return (
+                    <div
+                      key={i}
+                      className="jarvis-full__wave-bar"
+                      style={{ height: `${Math.max(10, level * 100)}%`, animation: "none" }}
+                    />
+                  );
+                }
+                return (
+                  <div
+                    key={i}
+                    className="jarvis-full__wave-bar jarvis-full__wave-bar--listening"
+                    style={{ animationDelay: `${i * 0.05}s` }}
+                  />
+                );
+              })}
+            </div>
+          )}
+
+          <div className="jarvis-full__log" ref={logRef}>
+            {status.conversationLog.map((turn, index) => (
               <div
-                key={i}
-                className="jarvis-full__wave-bar"
-                style={{ height: `${Math.max(10, level * 100)}%`, animation: "none" }}
-              />
-            );
-          }
-          return (
-            <div
-              key={i}
-              className={`jarvis-full__wave-bar${
-                status.currentState === "listening" ? " jarvis-full__wave-bar--listening" : ""
-              }`}
-              style={{ animationDelay: `${i * 0.05}s` }}
-            />
-          );
-        })}
-      </div>
-
-      <div className="jarvis-full__log">
-        {status.conversationLog.map((turn, index) => (
-          <div
-            key={`${turn.timestamp}-${turn.role}-${index}`}
-            className={`jarvis-full__bubble jarvis-full__bubble--${
-              turn.role === "user" ? "user" : "jarvis"
-            }`}
-          >
-            {turn.text}
+                key={`${turn.timestamp}-${turn.role}-${index}`}
+                className={`jarvis-full__bubble jarvis-full__bubble--${
+                  turn.role === "user" ? "user" : "jarvis"
+                }`}
+              >
+                {turn.text}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      <ChatInput onSend={status.sendMessage} />
+          <ChatInput onSend={status.sendMessage} />
+        </div>
+      </div>
     </div>
   );
 }

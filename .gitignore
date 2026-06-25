@@ -8,5 +8,9 @@ __pycache__/
 # IDE / Tool configurations
 .claude/
 
+# API 키 등 비밀값
+.env
+*.env
+
 # 개인 채팅 대화 기록 (실제 대화 원문이 들어있어 커밋하지 않음)
 data/chat_history.json

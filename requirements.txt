@@ -27,3 +27,11 @@ pyperclip>=1.8.2         # skill_clipboard
 
 # 유틸리티
 pyyaml>=6.0
+
+# Groq AI 엔진 (core/engines/groq_engine.py)
+groq>=0.11.0
+python-dotenv>=1.0.0
+
+# 웹 검색 (core/search_engine.py, skills/skill_web_search.py)
+ddgs>=9.0.0              # duckduckgo_search의 후속 패키지 (구버전은 deprecated)
+requests>=2.31.0         # Brave Search 폴백용

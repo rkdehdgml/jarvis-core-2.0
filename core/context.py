@@ -46,6 +46,10 @@ class ConversationContext:
             return list(self._history)
         return list(self._history[-n:])
 
+    def clear(self) -> None:
+        """대화 기록을 전부 비운다(세션 데이터는 유지)."""
+        self._history.clear()
+
     # --- 세션 데이터 (스킬 간 공유 상태) ---
 
     def get(self, key: str, default=None):

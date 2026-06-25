@@ -1,9 +1,11 @@
-"""웹 채팅 대화 기록을 디스크에 저장해 서버 재시작 후에도 복원한다.
+"""대화 기록을 디스크에 저장해 프로세스 재시작 후에도 복원한다.
 
 ui/server.py가 시작될 때 load_history()로 이전 대화를 _chat_context에
 복원하고, 매 채팅 턴이 끝날 때마다 append_turn()으로 누적 저장한다.
-음성 루프(main.py)의 ConversationContext는 이 모듈을 쓰지 않는다 — 대화 기록
-영구 보존은 웹 채팅 UI에만 필요한 기능이라 core가 아닌 ui 계층에 둔다.
+clear_history()는 채팅("/clear")과 음성("채팅 목록 지워줘") 양쪽에서 호출되는
+공유 동작이라 core/에 둔다(원래 ui/chat_history.py였다가 이 이유로 옮겨짐) —
+voice 채널의 ConversationContext 자체는 디스크에 저장되지 않지만, "채팅 목록"이
+가리키는 실제 데이터는 이 파일이라 음성 쪽 clear도 결국 여기를 지워야 한다.
 """
 import json
 import logging
@@ -33,3 +35,9 @@ def append_turn(turn: dict) -> None:
 
     _HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
     _HISTORY_PATH.write_text(json.dumps(history, ensure_ascii=False), encoding="utf-8")
+
+
+def clear_history() -> None:
+    """저장된 대화 기록을 전부 비운다."""
+    _HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _HISTORY_PATH.write_text("[]", encoding="utf-8")

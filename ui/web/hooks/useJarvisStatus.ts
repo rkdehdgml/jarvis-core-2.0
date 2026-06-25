@@ -13,8 +13,15 @@ export interface SystemInfo {
   memoryPercent: number;
 }
 
+/** 현재 ai_chat 폴백이 쓰는 엔진(Groq 또는 Claude Code) 식별 정보. */
+export interface EngineInfo {
+  provider: string;
+  model: string;
+  connected: boolean;
+}
+
 export interface JarvisStatus {
-  engineStatus: boolean;
+  engineInfo: EngineInfo;
   usageToday: number | null;
   activeSkills: string[];
   systemInfo: SystemInfo | null;
@@ -32,7 +39,7 @@ interface StatusApiResponse {
   state: JarvisState;
   lastResponse: string | null;
   timestamp: number;
-  engineStatus: boolean;
+  engineInfo: EngineInfo;
   activeSkills: string[];
   systemInfo: SystemInfo;
   usageToday: number | null;
@@ -42,7 +49,7 @@ interface WsPushPayload {
   state: JarvisState;
   lastResponse: string | null;
   timestamp: number;
-  engineStatus: boolean;
+  engineInfo: EngineInfo;
   systemInfo: SystemInfo;
   usageToday: number | null;
 }
@@ -54,7 +61,7 @@ const WS_URL = "ws://127.0.0.1:8765/ws";
 const RECONNECT_DELAY_MS = 2000;
 
 const initialStatus: JarvisStatus = {
-  engineStatus: false,
+  engineInfo: { provider: "-", model: "-", connected: false },
   usageToday: null,
   activeSkills: [],
   systemInfo: null,
@@ -89,7 +96,7 @@ export function useJarvisStatus(): UseJarvisStatusResult {
         lastResponse: payload.lastResponse ?? prev.lastResponse,
         // 채팅 상태 변화든 주기적인 시스템 정보 틱이든, push될 때마다 최신값으로
         // 비동기 갱신한다 (페이지 로드 시 한 번만 받던 동기식 스냅샷을 대체).
-        engineStatus: payload.engineStatus,
+        engineInfo: payload.engineInfo,
         systemInfo: payload.systemInfo,
         usageToday: payload.usageToday,
       };
@@ -145,13 +152,19 @@ export function useJarvisStatus(): UseJarvisStatusResult {
     }));
 
     try {
-      await fetch(`${API_BASE}/api/chat`, {
+      const res = await fetch(`${API_BASE}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: trimmed }),
       });
-      // 자비스의 응답은 /ws 를 통해 "responded" 이벤트로 push되어
-      // handlePush가 conversationLog에 자동으로 추가한다.
+      // 자비스의 응답은 보통 /ws 를 통해 "responded" 이벤트로 push되어
+      // handlePush가 conversationLog에 자동으로 추가한다. "/clear"는 예외 —
+      // 서버가 라우팅을 거치지 않고 즉시 cleared:true로 응답하므로, 방금 위에서
+      // 낙관적으로 추가한 "/clear" 턴까지 포함해 화면을 통째로 비운다.
+      const data = (await res.json()) as { cleared?: boolean };
+      if (data.cleared) {
+        setStatus((prev) => ({ ...prev, conversationLog: [] }));
+      }
     } catch {
       // 네트워크 오류 시에도 사용자 본인의 발화는 이미 로그에 남아 있다.
     }
@@ -166,7 +179,7 @@ export function useJarvisStatus(): UseJarvisStatusResult {
         if (cancelled) return;
         setStatus((prev) => ({
           ...prev,
-          engineStatus: data.engineStatus,
+          engineInfo: data.engineInfo,
           usageToday: data.usageToday,
           activeSkills: data.activeSkills,
           systemInfo: data.systemInfo,

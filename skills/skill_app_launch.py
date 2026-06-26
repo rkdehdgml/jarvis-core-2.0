@@ -1,4 +1,4 @@
-import subprocess
+import os
 
 from core.skill_base import Skill, SkillResult
 
@@ -41,7 +41,7 @@ class AppLaunchSkill(Skill):
 
         command = _APP_COMMANDS[app_name]
         try:
-            subprocess.Popen([command])
+            os.startfile(command)
         except Exception:
             return SkillResult(
                 speech=f"{app_name} 실행에 실패했습니다.",

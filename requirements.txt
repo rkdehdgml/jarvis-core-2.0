@@ -35,3 +35,17 @@ python-dotenv>=1.0.0
 # 웹 검색 (core/search_engine.py, skills/skill_web_search.py)
 ddgs>=9.0.0              # duckduckgo_search의 후속 패키지 (구버전은 deprecated)
 requests>=2.31.0         # Brave Search 폴백용
+
+# 신규 스킬 확장 (JARVIS_SKILLS_ARCHITECTURE.md 묶음 B)
+pyjokes>=0.6.0           # skill_joke
+qrcode[pil]>=7.4         # skill_qr
+
+# 신규 스킬 확장 (묶음 E)
+yt-dlp>=2024.1           # skill_youtube (pytube는 deprecated)
+
+# 신규 스킬 확장 (묶음 F)
+opencv-python>=4.9       # skill_camera (IP 카메라 스트림 캡처)
+
+# 신규 스킬 확장 (묶음 G)
+pypdf>=4.0               # skill_pdf_reader (PyPDF2는 deprecated)
+pywhatkit>=5.4           # skill_whatsapp (GUI 자동화 의존성 동반)

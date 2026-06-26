@@ -14,3 +14,9 @@ __pycache__/
 
 # 개인 채팅 대화 기록 (실제 대화 원문이 들어있어 커밋하지 않음)
 data/chat_history.json
+
+# 런타임 생성 산출물 (QR 이미지, 유튜브 다운로드 파일, 캡처, PDF 오디오)
+data/qr/
+data/youtube_downloads/
+data/captures/
+data/pdf_audio/

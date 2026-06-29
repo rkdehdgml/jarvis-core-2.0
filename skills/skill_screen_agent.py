@@ -57,6 +57,8 @@ _SYSTEM_PROMPT = (
     "- Respond ONLY in Korean when done. Be friendly and natural."
 )
 
+_XML_TOOL_RE = re.compile(r'<function=(\w+)\s*(\{[^<]*?\})?>', re.DOTALL)
+
 _TOOLS = [
     {
         "type": "function",
@@ -329,6 +331,18 @@ class ScreenAgentSkill(Skill):
             return None, "", True   # switch signal
 
         except BadRequestError as exc:
+            # Groq가 XML 형식으로 도구를 호출했을 때 파싱해서 재처리
+            try:
+                body = getattr(exc, "body", {}) or {}
+                err = body.get("error", {}) if isinstance(body, dict) else {}
+                failed_gen = err.get("failed_generation", "")
+                if failed_gen and "function=" in failed_gen:
+                    tool_calls = self._parse_xml_tool_calls(failed_gen)
+                    if tool_calls:
+                        logger.warning(f"Groq XML 도구 호출 파싱 재처리: {[t['name'] for t in tool_calls]}")
+                        return tool_calls, "", False
+            except Exception:
+                pass
             logger.error(f"Groq BadRequest (턴): {exc}")
             return None, f"Groq 요청 오류: {exc}", False
 
@@ -378,6 +392,17 @@ class ScreenAgentSkill(Skill):
         except Exception as exc:
             logger.error(f"Ollama 호출 실패: {exc}")
             return None, f"Ollama 오류: {exc}", False
+
+    def _parse_xml_tool_calls(self, text: str) -> list[dict]:
+        """<function=NAME {ARGS}></function> XML 형식을 tool_calls 목록으로 변환한다."""
+        tool_calls = []
+        for i, m in enumerate(_XML_TOOL_RE.finditer(text)):
+            tool_calls.append({
+                "id": f"xml_{i}",
+                "name": m.group(1),
+                "arguments": (m.group(2) or "{}").strip(),
+            })
+        return tool_calls
 
     # ── 도구 디스패치 ──────────────────────────────────────────────────────────
 

@@ -34,6 +34,7 @@ _dispatcher = Dispatcher(_registry)
 _chat_context = ConversationContext()
 _clients: set[WebSocket] = set()
 _loop: asyncio.AbstractEventLoop | None = None
+_broadcast_queue: asyncio.Queue | None = None
 
 # 채팅/음성 상태 변화가 없어도 엔진/CPU/메모리/사용량을 이 주기로 비동기 push한다.
 _SYSTEM_INFO_INTERVAL_SECONDS = 3
@@ -121,12 +122,24 @@ async def _broadcast(event: StatusEvent) -> None:
 def _on_status_event(event: StatusEvent) -> None:
     """StatusBroadcaster가 호출하는 동기 콜백.
 
-    emit()이 어느 스레드에서 호출되든 안전하게 이벤트 루프에 브로드캐스트를
-    예약한다 (main.py의 동기 루프와 uvicorn의 asyncio 루프가 분리되어 있을 수 있음).
+    call_soon_threadsafe로 asyncio Queue에 이벤트를 넣어 _broadcast_drainer가
+    처리하도록 한다. run_coroutine_threadsafe보다 신뢰성이 높다.
     """
-    if _loop is None:
+    if _loop is None or _broadcast_queue is None:
         return
-    asyncio.run_coroutine_threadsafe(_broadcast(event), _loop)
+    _loop.call_soon_threadsafe(_broadcast_queue.put_nowait, event)
+
+
+async def _broadcast_drainer() -> None:
+    """asyncio Queue에서 이벤트를 꺼내 WebSocket으로 중계한다.
+
+    백그라운드 스레드(버스 추적 등)가 put한 이벤트를 이벤트 루프 컨텍스트에서
+    안전하게 처리한다.
+    """
+    assert _broadcast_queue is not None
+    while True:
+        event = await _broadcast_queue.get()
+        await _broadcast(event)
 
 
 async def _system_info_loop() -> None:
@@ -138,12 +151,15 @@ async def _system_info_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _loop
+    global _loop, _broadcast_queue
     _loop = asyncio.get_running_loop()
+    _broadcast_queue = asyncio.Queue()
     broadcaster.subscribe(_on_status_event)
+    drainer_task = asyncio.create_task(_broadcast_drainer())
     system_info_task = asyncio.create_task(_system_info_loop())
     logger.info("UI 서버: 상태 브로드캐스터 구독 시작")
     yield
+    drainer_task.cancel()
     system_info_task.cancel()
     broadcaster.unsubscribe(_on_status_event)
 

@@ -64,14 +64,21 @@ def _start_webserver() -> None:
     같은 프로세스 내 실행이므로 core/status_events.py 의 broadcaster 인스턴스를
     공유한다. 음성 루프에서 emit()한 이벤트가 ui/server.py 의 _on_status_event
     콜백을 통해 WebSocket 클라이언트에 자동 전달된다.
+
+    uvicorn.Server를 직접 사용하고 install_signal_handlers를 비활성화한다.
+    서브스레드에서 signal.signal()을 호출하면 Python의 기본 SIGINT 핸들러
+    (KeyboardInterrupt)를 덮어써 Ctrl+C가 메인 스레드에 전달되지 않는 문제를 방지.
     """
-    uvicorn.run(
+    config = uvicorn.Config(
         "ui.server:app",
         host=_WEB_HOST,
         port=_WEB_PORT,
         log_level="warning",
         access_log=False,
     )
+    server = uvicorn.Server(config)
+    server.install_signal_handlers = lambda: None  # 시그널 핸들러 탈취 방지
+    server.run()
 
 
 def _run_text_loop(router: Router, dispatcher: Dispatcher, context: ConversationContext) -> None:

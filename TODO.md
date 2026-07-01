@@ -1,7 +1,7 @@
 # jarvis-core 2.0 — 전체 작업 목록
 
 > 노트북/PC 작업 전환용 메모. 완료 시 삭제 예정.  
-> 마지막 업데이트: 2026-07-01 (우선순위 1 완료)
+> 마지막 업데이트: 2026-07-01 (우선순위 2 완료)
 
 ---
 
@@ -62,13 +62,28 @@ WhisperFlow에서 가져오기로 한 기능과 jarvis-core 2.0에 새로 추가
 - [x] `hybrid_screen.py` — base64 임베드 → 파일 경로 방식으로 수정
 - [x] `.gitignore` — `.claude/settings.json` 예외 추가, 저장소 포함
 
+### 우선순위 2: 실 동작 테스트 (2026-07-01 완료)
+- [x] 2-A UIA 요소 수집 확인 — 메모장(5개)·크롬(39개, 부분 지원) 모두 60개 이하로 정상 수집,
+      `hybrid_screen.py`의 `_collect_uia()`/`_capture_annotated()`로 스크린샷·SoM 오버레이 임시 파일
+      생성 및 `_cleanup()` 삭제까지 확인. 진행 중 `comtypes 1.4.6`이 Python 3.13에서
+      `NameError: _compointer_base`로 깨지는 것을 발견 — `1.4.16`으로 업그레이드하고
+      `requirements.txt` 최소 버전 상향으로 반영.
+- [x] 2-B Claude CLI 연결 테스트 — `ClaudeCliEngine().describe()`
+      (`{'provider': 'Claude Code', 'connected': True, ...}`) 및 `.ask('안녕, 자비스야')`
+      실응답("안녕하세요. 자비스입니다. 무엇을 도와드릴까요?") 확인.
+- [x] 2-C 훅 동작 테스트 — `uvicorn ui.server:app` 기동 후 `jarvis_hook.py`/`jarvis_tool_hook.py`를
+      수동 트리거해 WebSocket 연결·전송이 예외 없이 종료(exit 0)됨을 확인. 단, 대시보드
+      클라이언트는 훅이 보낸 `tool_action`/`output` 페이로드를 **받지 못함** —
+      `ui/server.py`의 `/ws`가 클라이언트→서버 수신 메시지를 아직 브로드캐스트하지 않기 때문
+      (우선순위 3-C에서 구현 예정, 회귀 아님).
+
 ---
 
 ## 남은 작업
 
 ---
 
-### 🟠 우선순위 2 — 실 동작 테스트 (구현 전 필수 검증)
+### 🟠 우선순위 2 — 실 동작 테스트 (구현 전 필수 검증) — ✅ 완료 (위 참고)
 
 #### 2-A. 패키지 설치 및 UIA 동작 확인
 ```powershell

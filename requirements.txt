@@ -21,7 +21,7 @@ psutil>=5.9.0
 
 # STEP 15+ — 스킬 확장
 pycaw>=20240210         # skill_volume (Windows 전용)
-comtypes>=1.2.0          # skill_volume (pycaw 의존)
+comtypes>=1.4.16         # skill_volume (pycaw 의존). 1.4.6은 Python 3.13에서 NameError로 깨짐 (우선순위 2 검증 중 발견)
 pygetwindow>=0.0.9       # skill_window (Windows 전용)
 pyperclip>=1.8.2         # skill_clipboard
 

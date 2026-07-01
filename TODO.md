@@ -1,7 +1,33 @@
-# jarvis-core 2.0 — 남은 작업 목록
+# jarvis-core 2.0 — 전체 작업 목록
 
 > 노트북/PC 작업 전환용 메모. 완료 시 삭제 예정.  
 > 마지막 업데이트: 2026-07-01 (우선순위 1 완료)
+
+---
+
+## WhisperFlow 벤치마킹 기능 전체 목록
+
+WhisperFlow에서 가져오기로 한 기능과 jarvis-core 2.0에 새로 추가·수정할 전체 항목.
+
+| # | 기능 | WhisperFlow 원본 방식 | jarvis-core 2.0 구현 방식 | 상태 |
+|---|------|----------------------|--------------------------|------|
+| 1 | Claude CLI 단일 엔진 | claude 터미널에 STT 텍스트 직접 주입 | `claude -p` + `--dangerously-skip-permissions` | ✅ 완료 |
+| 2 | 화면 인식·제어 | computer_use Vision 단독 | UIA 트리 + Vision 하이브리드 (전략 A) | ✅ 완료 |
+| 3 | Claude Code 훅 | `jarvis_hook.sh` PostToolUse | `hooks/*.py` PostToolUse·Stop | ✅ 완료 |
+| 4 | 버그: 이미지 전달 | — | base64 → 파일 경로 방식 수정 | ✅ 완료 |
+| 5 | 가상 키보드 출력 | pbcopy + AppleScript → Claude 터미널 붙여넣기 | pyperclip + pyautogui Ctrl+V → 포커스 앱 입력 | ❌ 미구현 |
+| 6 | Always-Listen 상태 머신 | BOOT_WAIT→IDLE→SPEECH→CONV_WAIT | main.py 루프 재설계 | ❌ 미구현 |
+| 7 | TTS 인터럽트 | 없음 (Mac 특성) | 박수 2번 → pygame.mixer 즉시 중단 | ❌ 미구현 |
+| 8 | 스트리밍 TTS | STT→Claude 실시간 스트림 | run_task() 문장 버퍼링 → 즉시 TTS | ❌ 미구현 |
+| 9 | 실행 중 CLI 세션 주입 | STT를 열린 터미널에 직접 타이핑 | claude --resume 세션 재연결 | ❌ 미구현 |
+| 10 | 오디오 레벨 시각화 | 마이크 레벨 파형 UI 표시 | 웹 대시보드 AudioWave 컴포넌트 | ❌ 미구현 |
+| 11 | UI 실시간 진행 표시 | Claude 응답 스트리밍 실시간 출력 | streaming 상태 + tool_action 이벤트 | ❌ 미구현 |
+| 12 | skill_virtual_keyboard | 없음 | "이 내용 입력해줘" → 포커스 앱 타이핑 스킬 | ❌ 미구현 |
+| 13 | 실 동작 테스트 | — | uiautomation·Claude CLI·훅 연결 검증 | ❌ 미완료 |
+| 14 | UIA 깊이·요소수 튜닝 | — | 실 앱 테스트 후 _MAX_ELEMENTS 조정 | ❌ 미완료 |
+| 15 | claude --resume 세션 유지 | 없음 (단발 -p) | 장시간 작업 세션 연속성 | ❌ 미구현 |
+| 16 | 트리거 자연어 확장 | — | "열어서~", "들어가서~" 패턴 추가 | ❌ 미구현 |
+| 17 | groq_usage.json 정리 | — | 삭제 또는 claude_usage.json으로 교체 | ❌ 미완료 |
 
 ---
 
@@ -11,25 +37,30 @@
 - [x] `core/engines/groq_engine.py` 삭제
 - [x] `core/engines/ollama_engine.py` 삭제
 - [x] `core/groq_usage.py` 삭제
-- [x] `core/engines/claude_cli_engine.py` 신규 생성
+- [x] `core/engines/claude_cli_engine.py` 신규
   - `ask()` / `generate()` — 안전 모드 (WebSearch·WebFetch만 허용)
-  - `run_task()` — 풀파워 모드 (computer_use 포함 전체 툴)
+  - `run_task()` — 풀파워 모드 (computer_use 포함 전체 툴, stream-json)
   - `describe()` — UI 엔진 패널용
 - [x] `skills/skill_ai_chat.py` 교체 (ClaudeCliEngine 단일)
 - [x] `skills/skill_agent.py` 교체 (run_task() 위임)
 - [x] `skills/skill_screen_agent.py` 교체 (HybridScreenEngine 사용)
-- [x] `skills/skill_howto.py` / `skill_joke.py` / `skill_weather.py` / `skill_web_search.py` — GroqEngine → ClaudeCliEngine
+- [x] `skills/skill_howto|joke|weather|web_search.py` — GroqEngine → ClaudeCliEngine
 - [x] `requirements.txt` — groq 제거, uiautomation 추가
 - [x] `tests/test_agent_e2e.py` / `test_skill_agent.py` 삭제
 
 ### 전략 A: UIA + Vision 하이브리드 화면 제어
-- [x] `core/hybrid_screen.py` 신규 생성
+- [x] `core/hybrid_screen.py` 신규
   - UIA 요소 트리 수집 (`_collect_uia`)
-  - SoM 번호 오버레이 이미지 생성 (`_capture_annotated`)
-  - Claude 통합 레이어 (`_ask_claude`)
-- [x] `skills/skill_computer_use.py` 신규 생성
-- [x] `hooks/jarvis_tool_hook.py` / `jarvis_hook.py` / `jarvis_send.py` 신규 생성
-- [x] `.claude/settings.json` 훅 등록
+  - SoM 번호 오버레이 PNG 임시 파일 저장 (`_capture_annotated`)
+  - Claude 통합 레이어 — UIA JSON + 파일 경로 전달 (`_ask_claude`)
+  - `_cleanup()` — 작업 완료 후 임시 파일 삭제
+- [x] `skills/skill_computer_use.py` 신규 (화면 분석 전용)
+- [x] `hooks/jarvis_tool_hook.py` / `jarvis_hook.py` / `jarvis_send.py` 신규
+- [x] `.claude/settings.json` 훅 등록 + `.gitignore` 예외 처리
+
+### 우선순위 1: 버그 수정 (2026-07-01 완료)
+- [x] `hybrid_screen.py` — base64 임베드 → 파일 경로 방식으로 수정
+- [x] `.gitignore` — `.claude/settings.json` 예외 추가, 저장소 포함
 
 ---
 
@@ -37,98 +68,90 @@
 
 ---
 
-### ✅ 우선순위 1 — 버그 수정 (완료 2026-07-01)
+### 🟠 우선순위 2 — 실 동작 테스트 (구현 전 필수 검증)
 
-#### 1-A. `hybrid_screen.py` 이미지 전달 방식 수정
-**문제**: `_capture_annotated()`가 생성한 base64 이미지를 `_ask_claude()`에서 프롬프트 텍스트에 직접 임베드하고 있는데,  
-Claude Code CLI의 `-p` 플래그는 텍스트만 받으므로 이미지를 인식하지 못함.
-
-**해결 방향 (둘 중 하나 선택):**
-
-- **옵션 A (권장)**: 스크린샷을 temp 파일로 저장 → 프롬프트에 파일 경로 포함
-  ```python
-  # 현재 (동작 안 함)
-  prompt = f"...base64 이미지: {annotated_b64}..."
-  
-  # 수정 후
-  import tempfile
-  path = tempfile.mktemp(suffix=".png")
-  annotated_img.save(path)
-  prompt = f"...스크린샷 파일: {path} (Read 툴로 열어볼 수 있음)..."
-  ```
-  > Claude Code CLI는 computer_use 툴로 자체 스크린샷을 찍을 수 있으므로  
-  > 파일 경로만 알려줘도 직접 열어볼 수 있음.
-
-- **옵션 B**: 스크린샷 직접 전달 포기 → UIA JSON만 전달하고 Claude computer_use가 자체 스크린샷 촬영
-  ```python
-  # _capture_annotated() 전체 제거
-  # _ask_claude()에서 UIA JSON만 전달
-  # Claude가 필요하면 computer_use로 스스로 스크린샷 찍음
-  ```
-
-**수정할 파일**: `core/hybrid_screen.py` → `_capture_annotated()`, `_ask_claude()`
-
----
-
-#### 1-B. `.claude/settings.json` gitignore 제외 확인
-**문제**: `.gitignore`에 `.claude/`가 등록되어 있어 훅 설정 파일이 저장소에 포함 안 됨.
-
-**해결**: 두 가지 선택지
-- `.gitignore`에서 `.claude/settings.json`만 예외 처리: `!.claude/settings.json`
-- 또는 수동으로 `git add -f .claude/settings.json && git commit && git push`
-
-**수정할 파일**: `.gitignore`
-
----
-
-### 🟠 우선순위 2 — 실 동작 테스트
-
-#### 2-A. uiautomation 패키지 설치 및 테스트
+#### 2-A. 패키지 설치 및 UIA 동작 확인
 ```powershell
 pip install uiautomation>=2.0.18
 ```
+
+```python
+# 빠른 UIA 수집 확인 스크립트 (터미널에서 직접 실행)
+# 메모장을 먼저 열어두고 실행
+import uiautomation as auto
+root = auto.GetForegroundControl()
+print(root.Name, root.ControlTypeName)
+for c in root.GetChildren():
+    print(" ", c.Name, c.ControlTypeName, c.BoundingRectangle)
+```
+
 **테스트 시나리오:**
-1. 메모장 열기 → "화면 제어로 메모장에 '안녕' 입력해줘" 실행
-2. 크롬 열기 → "화면 제어로 크롬 주소창에 naver.com 입력해줘" 실행
-3. "지금 화면 봐줘" 실행 → UIA 요소 목록 + 설명 확인
+1. 메모장 오픈 → `python main.py --text` → "화면 제어로 메모장에 안녕 입력해줘"
+2. 크롬 오픈 → "화면 제어로 크롬 주소창에 naver.com 입력해줘"
+3. "지금 화면 봐줘" → UIA 요소 목록 + 설명 출력 확인
 
 **확인 포인트:**
-- UIA 요소가 60개 이하로 정상 수집되는지
-- Windows 앱(메모장, 탐색기)에서 정확한 좌표가 나오는지
-- 크롬 브라우저에서 UIA 수집이 부분 지원되는지 (웹 콘텐츠는 Vision 폴백)
+- UIA 요소 60개 이하 정상 수집 여부
+- Windows 네이티브 앱 (메모장, 탐색기) 정확 좌표 여부
+- 크롬에서 UIA 부분 지원 / 웹 콘텐츠 Vision 폴백 동작 여부
+- 임시 파일(`jarvis_screen_*.png`, `jarvis_som_*.png`) 생성 및 cleanup 여부
 
 ---
 
 #### 2-B. Claude Code CLI 연결 테스트
 ```powershell
-# .venv 활성화 후
-python -c "from core.engines.claude_cli_engine import ClaudeCliEngine; e = ClaudeCliEngine(); print(e.describe())"
-```
-**예상 출력**: `{'provider': 'Claude Code', 'model': 'Claude Code CLI', 'connected': True, 'usagePercent': 0.0}`
+# describe() 확인
+python -c "from core.engines.claude_cli_engine import ClaudeCliEngine; print(ClaudeCliEngine().describe())"
+# 예상: {'provider': 'Claude Code', 'model': 'Claude Code CLI', 'connected': True, 'usagePercent': 0.0}
 
-```powershell
-# 간단한 ask() 테스트
-python -c "from core.engines.claude_cli_engine import ClaudeCliEngine; print(ClaudeCliEngine().ask('안녕'))"
+# ask() 단순 응답 확인
+python -c "from core.engines.claude_cli_engine import ClaudeCliEngine; print(ClaudeCliEngine().ask('안녕, 자비스야'))"
 ```
 
 ---
 
 #### 2-C. 훅 동작 테스트
 ```powershell
-# UI 서버 먼저 실행
+# 터미널 1: 자비스 실행
 python main.py --text
 
-# 별도 터미널에서 훅 수동 테스트
-echo '{"result": "테스트 응답"}' | python hooks/jarvis_hook.py
-echo '{"tool_name": "WebSearch", "tool_input": {"query": "날씨"}}' | python hooks/jarvis_tool_hook.py
+# 터미널 2: 훅 수동 트리거
+echo '{"result": "테스트 응답입니다"}' | python hooks/jarvis_hook.py
+echo '{"tool_name": "WebSearch", "tool_input": {"query": "날씨"}, "tool_response": {}}' | python hooks/jarvis_tool_hook.py
 ```
-웹 대시보드(`http://localhost:8765`)에서 메시지 수신 확인.
+→ `http://localhost:8765` 대시보드에서 메시지 수신 확인
 
 ---
 
-### 🟡 우선순위 3 — UI 스트리밍 개선
+### 🟡 우선순위 3 — 스트리밍·UI 개선
 
-#### 3-A. `core/status_events.py` — `"streaming"` 상태 추가
+#### 3-A. `core/engines/claude_cli_engine.py` — TTS 문장 버퍼링
+현재 `on_chunk` 콜백이 단어/문장 조각 단위로 호출돼 TTS가 어색하게 끊김.  
+마침표·느낌표·줄바꿈 기준으로 버퍼링 후 문장 완성 시에만 TTS 호출.
+
+```python
+# run_task() 내 스트리밍 루프 수정
+_SENTENCE_END = (".", "!", "?", "。", "\n")
+
+buf = ""
+for raw_line in proc.stdout:
+    # ... JSON 파싱 후 chunk 추출 ...
+    buf += chunk
+    if on_chunk and any(buf.rstrip().endswith(p) for p in _SENTENCE_END):
+        sentence = buf.strip()
+        if sentence:
+            on_chunk(sentence)
+        buf = ""
+# 루프 종료 후 잔여 버퍼 처리
+if on_chunk and buf.strip():
+    on_chunk(buf.strip())
+```
+
+**수정할 파일**: `core/engines/claude_cli_engine.py` (`run_task()`)
+
+---
+
+#### 3-B. `core/status_events.py` — `"streaming"` 상태 추가
 ```python
 # 현재
 State = Literal["idle", "listening", "processing", "responded", "navigation_request"]
@@ -136,153 +159,291 @@ State = Literal["idle", "listening", "processing", "responded", "navigation_requ
 # 수정 후
 State = Literal["idle", "listening", "processing", "streaming", "responded", "navigation_request"]
 ```
-`streaming` 상태: Claude가 run_task()로 실행 중이고 청크가 들어오는 중.
+- `processing`: 라우팅·디스패치 중 (짧은 구간)
+- `streaming`: Claude run_task() 실행 중, 청크가 들어오는 중 (긴 구간)
 
-**수정할 파일**: `core/status_events.py`
+`Dispatcher.dispatch()` 또는 `skill_screen_agent.execute()` 에서 streaming emit 추가.
+
+**수정할 파일**: `core/status_events.py`, `core/dispatcher.py` 또는 해당 스킬
 
 ---
 
-#### 3-B. `ui/server.py` — 훅 WebSocket 이벤트 수신 처리
-현재 훅(`jarvis_send.py`)이 `ws://127.0.0.1:8765/ws`로 보내는 `tool_action` 타입 메시지를  
-서버가 받아서 모든 클라이언트에 브로드캐스트하도록 추가.
+#### 3-C. `ui/server.py` — 훅 WebSocket 이벤트 수신·브로드캐스트
+현재 WS 엔드포인트는 클라이언트(브라우저)→서버 방향만 처리.  
+훅(`jarvis_send.py`)이 `tool_action` / `output` 타입으로 보내는 메시지를  
+받아서 전체 클라이언트에 브로드캐스트하도록 추가.
 
 ```python
-# ui/server.py WS 엔드포인트에 추가
-if data.get("type") == "tool_action":
-    # Claude Code 훅에서 온 툴 동작 알림
-    await broadcast({"type": "tool_action", "value": data["value"]})
+# ui/server.py WebSocket 핸들러 내 수신 처리 추가
+async def websocket_endpoint(ws: WebSocket):
+    ...
+    async for raw in ws.iter_text():
+        data = json.loads(raw)
+        if data.get("type") in ("tool_action", "output"):
+            # 훅에서 온 Claude 진행 상황 → 전체 클라이언트 브로드캐스트
+            await _broadcast_all(data)
 ```
 
 **수정할 파일**: `ui/server.py`
 
 ---
 
-#### 3-C. 프론트엔드 — Claude 실행 중 실시간 진행 표시
-`ui/web/hooks/useJarvisStatus.ts`에서 `tool_action` 이벤트 수신 후  
-"화면 제어: click", "웹 검색 중: 날씨" 등을 UI에 실시간 표시.
+#### 3-D. 프론트엔드 — Claude 실행 중 실시간 진행 표시
+`useJarvisStatus.ts`에서 `tool_action` 이벤트 수신 후  
+"웹 검색 중: 날씨", "화면 제어: click" 등을 채팅 UI에 인라인으로 표시.
 
-**수정할 파일**: `ui/web/hooks/useJarvisStatus.ts`, 관련 컴포넌트
+```typescript
+// useJarvisStatus.ts 추가
+case "tool_action":
+  setToolAction(data.value);   // 진행 표시줄 or 인라인 배지
+  break;
+```
+
+**수정할 파일**: `ui/web/hooks/useJarvisStatus.ts`, `ui/web/components/JarvisMinimal.tsx` 또는 `JarvisFull.tsx`
 
 ---
 
-### 🟢 우선순위 4 — 기능 추가
+### 🔵 우선순위 4 — WhisperFlow 핵심 기능 이식
 
-#### 4-A. TTS 인터럽트 (WhisperFlow 방식)
-박수 두 번 감지 시 현재 재생 중인 TTS를 즉시 중단.  
-`ClapDetector`는 이미 존재 (`voice/clap_detector.py`).
+#### 4-A. TTS 인터럽트 — 박수 2번 → TTS 즉시 중단
+WhisperFlow의 인터럽트 메커니즘. `ClapDetector`는 이미 존재.
 
 ```python
-# voice/tts.py에 추가
-import pygame
-def stop():
-    if pygame.mixer.get_init():
-        pygame.mixer.music.stop()
+# voice/tts.py 에 stop() 추가
+def stop() -> None:
+    """재생 중인 TTS를 즉시 중단한다."""
+    try:
+        if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
+            pygame.mixer.music.stop()
+    except Exception:
+        pass
 
-# voice/wakeword.py 또는 main.py에서
-# ClapDetector가 감지하면 tts.stop() 호출
+# main.py _run_voice_loop() 수정
+# TTS speak() 중에도 ClapDetector를 별도 스레드로 감시
+import threading
+from voice.clap_detector import ClapDetector
+from voice import tts
+
+def _tts_with_interrupt(text: str) -> None:
+    """TTS 재생 중 박수 2번 감지 시 즉시 중단."""
+    detector = ClapDetector()
+    stop_event = threading.Event()
+
+    def _watch():
+        if detector.wait_for_double_clap(timeout=30):
+            tts.stop()
+            stop_event.set()
+
+    t = threading.Thread(target=_watch, daemon=True)
+    t.start()
+    tts.speak(text)
+    stop_event.set()  # TTS 완료 시 감시 스레드 종료
 ```
 
 **수정할 파일**: `voice/tts.py`, `main.py`
 
 ---
 
-#### 4-B. `claude --resume` 세션 유지
-장시간 화면 제어 작업에서 이전 Claude 세션을 이어가는 기능.
+#### 4-B. 가상 키보드 출력 (WhisperFlow 핵심 기능 Windows 이식)
+WhisperFlow 원리: STT 결과 → `pbcopy` (클립보드) → AppleScript `Cmd+V + Enter` → Claude CLI 터미널에 입력.  
+Windows 대응: STT 결과 또는 자비스 응답 → `pyperclip.copy()` → `pyautogui.hotkey('ctrl','v')` → 현재 포커스 앱에 직접 타이핑.
+
+**신규 파일**: `voice/virtual_keyboard.py`
+```python
+"""현재 포커스 앱에 텍스트를 클립보드→붙여넣기 방식으로 입력한다.
+WhisperFlow의 pbcopy + AppleScript 메커니즘을 Windows에서 구현.
+"""
+import time
+import pyperclip
+import pyautogui
+
+def type_text(text: str, press_enter: bool = False) -> None:
+    """포커스된 앱에 text를 붙여넣는다."""
+    pyperclip.copy(text)
+    time.sleep(0.05)
+    pyautogui.hotkey('ctrl', 'v')
+    if press_enter:
+        time.sleep(0.05)
+        pyautogui.press('enter')
+
+def inject_to_claude_terminal(text: str) -> None:
+    """실행 중인 Claude CLI 터미널에 텍스트를 입력한다.
+    터미널 창을 포커스한 뒤 붙여넣고 Enter를 누른다.
+    """
+    import pygetwindow as gw
+    # claude 터미널 창 찾기 (제목에 'claude' 포함)
+    wins = [w for w in gw.getAllWindows()
+            if 'claude' in w.title.lower() or 'powershell' in w.title.lower()]
+    if wins:
+        wins[0].activate()
+        time.sleep(0.1)
+    type_text(text, press_enter=True)
+```
+
+**신규 파일**: `skills/skill_virtual_keyboard.py`
+```python
+# "이 내용 입력해줘", "자비스 응답을 창에 입력해줘" 트리거
+# 직전 자비스 응답(context에서 읽기) 또는 발화 내 텍스트를 포커스 앱에 타이핑
+```
+
+**수정할 파일 (선택)**: `main.py` — 음성 응답 후 자동으로 Claude 터미널에 주입하는 모드 추가
+
+**필요 패키지**: `pyperclip` (이미 있음), `pyautogui` (이미 있음), `pygetwindow` (이미 있음)
+
+---
+
+#### 4-C. Always-Listen 상태 머신 개선
+WhisperFlow 방식: `BOOT_WAIT → IDLE → SPEECH → CONV_WAIT` 4단계.  
+현재 `main.py`는 단순 while 루프 + active 플래그. 상태 전환이 명시적이지 않음.
 
 ```python
-# claude_cli_engine.py에 session_id 관리 추가
-proc = subprocess.Popen([
-    "claude", "-p", prompt,
-    "--resume", self._session_id,  # 이전 세션 ID
-    "--dangerously-skip-permissions",
-    "--output-format", "stream-json",
-])
-# result 이벤트에서 session_id 추출해 저장
+# main.py 상태 머신 리팩토링
+from enum import Enum, auto
+
+class ListenState(Enum):
+    BOOT_WAIT  = auto()  # 시작 대기 (wakeword 또는 clap 감지 전)
+    IDLE       = auto()  # 웨이크워드 감지 후 명령 대기
+    SPEECH     = auto()  # STT 수신 중
+    CONV_WAIT  = auto()  # Claude 응답 중 (follow_up 대기)
+
+# 각 상태에서 broadcaster.emit()으로 UI에 현재 상태 전달
+# BOOT_WAIT → idle, IDLE → listening, SPEECH → processing, CONV_WAIT → streaming
+```
+
+**수정할 파일**: `main.py`
+
+---
+
+#### 4-D. 실행 중인 Claude CLI 세션 재연결 (`--resume`)
+단발 `-p` 호출 대신 이전 세션을 이어가는 방식.  
+장시간 화면 제어 작업에서 컨텍스트 유지에 유리.
+
+```python
+# core/engines/claude_cli_engine.py 에 session_id 관리 추가
+class ClaudeCliEngine:
+    def __init__(self, ...):
+        self._session_id: str | None = None   # 마지막 세션 ID 저장
+
+    def run_task(self, task, on_chunk=None, resume=False):
+        cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions",
+               "--output-format", "stream-json"]
+        if resume and self._session_id:
+            cmd += ["--resume", self._session_id]
+        ...
+        # result 이벤트에서 session_id 추출
+        elif event_type == "result":
+            self._session_id = obj.get("session_id")  # 다음 호출에서 재사용
 ```
 
 **수정할 파일**: `core/engines/claude_cli_engine.py`
 
 ---
 
-#### 4-C. `skill_screen_agent.py` 트리거 확장
-현재 트리거가 "화면 제어", "직접 제어" 등 명시적 키워드에만 반응.  
-더 자연스러운 발화 패턴 추가.
+#### 4-E. 실시간 오디오 레벨 시각화
+WhisperFlow UI처럼 마이크 입력 레벨을 실시간 파형으로 표시.
 
-```python
-# 추가 트리거 예시
-"열어서 ~ 해줘"   → 앱 열고 작업
-"들어가서 ~ 해줘" → 웹사이트 접속 후 작업
-"클릭해줘"        → 현재 화면의 특정 요소 클릭
-"입력해줘"        → 현재 포커스 창에 텍스트 입력
+**흐름**:
+```
+voice/stt.py 오디오 콜백 → 레벨 계산(RMS) → broadcaster.emit(state="listening", extra={"level": rms})
+→ ui/server.py WS 브로드캐스트
+→ ui/web AudioWave.tsx 컴포넌트 실시간 렌더링
 ```
 
-**수정할 파일**: `skills/skill_screen_agent.py`
+**신규 파일**: `ui/web/components/AudioWave.tsx`
+
+```typescript
+// 간단한 막대 파형 컴포넌트
+const AudioWave = ({ level }: { level: number }) => (
+  <div className="audio-wave">
+    {Array.from({ length: 12 }).map((_, i) => (
+      <span key={i} style={{ height: `${Math.random() * level * 100}%` }} />
+    ))}
+  </div>
+);
+```
+
+**수정할 파일**: `voice/stt.py` (레벨 emit 추가), `core/status_events.py` (extra 필드 활용), `ui/server.py`, `ui/web/`
 
 ---
 
-#### 4-D. 화면 제어 결과를 음성으로 단계별 보고
-`run_task(on_chunk=tts.speak)` 시 Claude의 스트리밍 텍스트가 그대로 TTS 출력됨.  
-현재는 청크 단위(단어/문장 조각)라 어색함.  
-문장 단위로 버퍼링 후 TTS 호출하도록 개선.
+### ⚪ 우선순위 5 — 마무리·정리
 
+#### 5-A. `skill_screen_agent.py` 트리거 자연어 확장
 ```python
-# claude_cli_engine.py run_task() 내 on_chunk 처리
-buffer = ""
-for chunk in streaming:
-    buffer += chunk
-    if any(buffer.endswith(p) for p in (".", "!", "?", "\n")):
-        if on_chunk:
-            on_chunk(buffer.strip())
-        buffer = ""
+# 현재 (명시적 키워드만)
+_STRONG = ["화면 제어", "화면 에이전트", "직접 제어", ...]
+
+# 추가할 패턴
+"열어서 ~ 해줘"    → 앱 열고 작업 수행
+"들어가서 ~ 해줘"  → 웹사이트 접속 후 작업
+"클릭해줘"         → 현재 화면의 특정 버튼 클릭
+"입력해줘"         → 현재 포커스 창에 텍스트 입력
+"스크롤해줘"       → 화면 스크롤
+"닫아줘"           → 현재 창 닫기
 ```
 
-**수정할 파일**: `core/engines/claude_cli_engine.py`
+#### 5-B. `core/hybrid_screen.py` UIA 파라미터 튜닝
+실 앱 테스트 후 아래 값 조정:
+```python
+_MAX_ELEMENTS   = 60   # 복잡한 앱은 80~100으로 증가 검토
+_OVERLAY_RADIUS = 12   # 고해상도 화면은 16으로 증가 검토
+# _walk_uia depth 8 → 앱에 따라 10~12 필요할 수 있음
+```
 
----
+#### 5-C. `data/groq_usage.json` 정리
+Groq 제거로 파일 내용이 무의미.
+```powershell
+# 파일 초기화 후 커밋
+echo '{}' > data/groq_usage.json
+# 또는 .gitignore에 추가하고 삭제
+```
 
-### ⚪ 우선순위 5 — 선택 작업
-
-#### 5-A. `core/hybrid_screen.py` UIA 깊이 튜닝
-현재 `_walk_uia()` 최대 깊이 8, 최대 요소 60개.  
-실제 테스트 후 값 조정 (복잡한 앱은 더 필요할 수 있음).
-
-#### 5-B. 화면 제어 전용 테스트 스크립트 작성
+#### 5-D. 화면 제어 전용 테스트 스크립트
 ```python
 # tests/test_hybrid_screen.py
 from core.hybrid_screen import HybridScreenEngine
 engine = HybridScreenEngine()
-elements = engine._collect_uia()
-print(f"수집된 요소 수: {len(elements)}")
-for el in elements[:10]:
-    print(el.to_dict())
-```
 
-#### 5-C. `data/groq_usage.json` 파일 역할 변경
-Groq 제거로 내용이 무의미해짐.  
-`data/claude_usage.json`으로 교체하거나 기존 `data/usage.json`으로 통합.
+# UIA 수집 테스트
+elements = engine._collect_uia()
+print(f"UIA 요소 수: {len(elements)}")
+for el in elements[:5]:
+    print(f"  [{el.idx}] {el.control_type} '{el.name}' @ {el.center}")
+
+# 스크린샷 저장 테스트
+orig, ann = engine._capture_annotated(elements)
+print(f"원본: {orig}")
+print(f"SoM: {ann}")
+```
 
 ---
 
-## 작업 순서 권장
+## 권장 작업 순서
 
 ```
-1-A 버그 수정 (hybrid_screen.py 이미지 전달)
-    ↓
-2-A uiautomation 설치 + 테스트
-2-B Claude CLI 연결 테스트
-    ↓
-2-C 훅 동작 확인
-    ↓
-3-A status_events.py streaming 상태 추가
-3-B ui/server.py 훅 이벤트 처리
-    ↓
-4-D TTS 청크 버퍼링 개선
-4-A TTS 인터럽트
-    ↓
-3-C 프론트엔드 실시간 진행 표시
-    ↓
-4-B 세션 유지 (--resume)
-4-C 트리거 확장
+[즉시] 우선순위 2 — 실 동작 테스트
+  2-A  pip install uiautomation → UIA 수집 확인
+  2-B  Claude CLI ask() 응답 확인
+  2-C  훅 WebSocket 수신 확인
+       ↓
+[단기] 우선순위 3 — 스트리밍·UI 개선
+  3-A  claude_cli_engine.py TTS 문장 버퍼링
+  3-B  status_events.py streaming 상태 추가
+  3-C  ui/server.py 훅 이벤트 수신·브로드캐스트
+  3-D  프론트엔드 실시간 진행 표시
+       ↓
+[중기] 우선순위 4 — WhisperFlow 기능 이식
+  4-A  TTS 인터럽트 (박수 2번 → pygame stop)
+  4-B  가상 키보드 출력 (virtual_keyboard.py + skill)
+  4-C  Always-Listen 상태 머신 리팩토링
+  4-D  claude --resume 세션 유지
+  4-E  오디오 레벨 시각화 (AudioWave.tsx)
+       ↓
+[마무리] 우선순위 5 — 정리
+  5-A  트리거 자연어 확장
+  5-B  UIA 파라미터 튜닝
+  5-C  groq_usage.json 정리
+  5-D  테스트 스크립트 작성
 ```
 
 ---
@@ -297,20 +458,23 @@ cd jarvis-core-2.0
 # 2. 가상환경
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+# 실행 정책 오류 시: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
-# 3. 패키지
+# 3. 패키지 설치
 pip install -r requirements.txt
+# uiautomation은 별도 설치 필요할 수 있음
+pip install uiautomation>=2.0.18
 
-# 4. Claude Code CLI
+# 4. Claude Code CLI 설치 및 로그인 (최초 1회)
 npm install -g @anthropic-ai/claude-code
 claude login
 
-# 5. .env 복사 (Kakao, NewsAPI, 버스 API 키 등)
+# 5. 환경변수 설정
 copy .env.example .env
-# 각 키 입력
+# KAKAO_REST_API_KEY, KAKAO_JS_API_KEY, NEWSAPI_KEY, DAEJEON_BUS_API_KEY 등 입력
 
-# 6. 훅 설정 (gitignore 제외 상태라 수동 생성)
-# .claude/settings.json 파일을 아래 내용으로 직접 생성
+# 6. .claude/settings.json 확인 (이제 저장소에 포함됨)
+# 없으면 수동 생성:
 # {
 #   "hooks": {
 #     "PostToolUse": [{"matcher":".*","hooks":[{"type":"command","command":"python hooks/jarvis_tool_hook.py"}]}],
@@ -318,6 +482,29 @@ copy .env.example .env
 #   }
 # }
 
-# 7. 동작 확인
+# 7. 동작 확인 (텍스트 모드로 빠르게 검증)
 python main.py --text
+
+# 8. Claude CLI 연결 확인
+python -c "from core.engines.claude_cli_engine import ClaudeCliEngine; print(ClaudeCliEngine().describe())"
 ```
+
+---
+
+## 파일별 변경 영향도 요약
+
+| 파일 | 작업 | 우선순위 |
+|------|------|---------|
+| `core/engines/claude_cli_engine.py` | TTS 버퍼링(3-A), --resume(4-D) | 3, 4 |
+| `core/status_events.py` | streaming 상태 추가(3-B) | 3 |
+| `core/hybrid_screen.py` | UIA 파라미터 튜닝(5-B) | 5 |
+| `ui/server.py` | 훅 이벤트 수신·브로드캐스트(3-C) | 3 |
+| `ui/web/hooks/useJarvisStatus.ts` | tool_action 처리(3-D) | 3 |
+| `ui/web/components/AudioWave.tsx` | 신규 — 오디오 파형(4-E) | 4 |
+| `voice/tts.py` | stop() 추가(4-A) | 4 |
+| `voice/virtual_keyboard.py` | 신규 — 가상 키보드(4-B) | 4 |
+| `voice/stt.py` | 레벨 emit 추가(4-E) | 4 |
+| `main.py` | 상태 머신(4-C), TTS 인터럽트(4-A) | 4 |
+| `skills/skill_virtual_keyboard.py` | 신규 — 가상 키보드 스킬(4-B) | 4 |
+| `skills/skill_screen_agent.py` | 트리거 확장(5-A) | 5 |
+| `data/groq_usage.json` | 정리(5-C) | 5 |

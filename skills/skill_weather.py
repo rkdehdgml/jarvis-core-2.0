@@ -1,6 +1,6 @@
 import re
 
-from core.engines.groq_engine import GroqEngine
+from core.engines.claude_cli_engine import ClaudeCliEngine
 from core.skill_base import Skill, SkillResult
 from core.weather_client import WeatherClient
 
@@ -41,7 +41,7 @@ _SYSTEM_PROMPT = (
 
 
 class WeatherSkill(Skill):
-    """Open-Meteo로 현재 날씨(기온/습도/강수/풍속)를 조회해 Groq로 자연스럽게 답한다."""
+    """Open-Meteo로 현재 날씨(기온/습도/강수/풍속)를 조회해 Claude CLI로 자연스럽게 답한다."""
 
     name = "weather"
     description = "현재 날씨(기온, 습도, 강수 등)를 조회해서 알려준다"
@@ -50,7 +50,7 @@ class WeatherSkill(Skill):
 
     def __init__(self) -> None:
         self._weather = WeatherClient()
-        self._groq = GroqEngine()
+        self._engine = ClaudeCliEngine()
 
     def can_handle(self, intent: str, text: str) -> float:
         if any(k in text for k in _STRONG_KEYWORDS):
@@ -70,7 +70,7 @@ class WeatherSkill(Skill):
 
         formatted = self._weather.format_current(weather)
         prompt = f"사용자 질문: {text}\n\n날씨 데이터:\n{formatted}"
-        speech = self._groq.generate(prompt, system=_SYSTEM_PROMPT)
+        speech = self._engine.generate(prompt, system=_SYSTEM_PROMPT)
 
         return SkillResult(
             speech=speech,

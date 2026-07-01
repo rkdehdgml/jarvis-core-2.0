@@ -1,12 +1,11 @@
 """짧은 농담을 들려주는 스킬.
 
-pyjokes로 영어 농담 원문을 가져온 뒤, GroqEngine.generate()로 자연스럽고 짧은
-한국어 농담으로 번역/현지화해서 들려준다(skill_weather.py의 패턴과 동일 —
-외부 데이터를 가져와 Groq로 다듬는 흐름).
+pyjokes로 영어 농담 원문을 가져온 뒤, ClaudeCliEngine.generate()로 자연스럽고
+짧은 한국어 농담으로 번역/현지화해서 들려준다.
 """
 import pyjokes
 
-from core.engines.groq_engine import GroqEngine
+from core.engines.claude_cli_engine import ClaudeCliEngine
 from core.skill_base import Skill, SkillResult
 
 _TRIGGERS = ["농담", "썰렁한 농담", "유머", "개그", "재밌는 얘기"]
@@ -19,7 +18,7 @@ _SYSTEM_PROMPT = (
 
 
 class JokeSkill(Skill):
-    """pyjokes로 영어 농담을 가져와 Groq로 한국어 농담으로 다듬어 들려준다."""
+    """pyjokes로 영어 농담을 가져와 Claude CLI로 한국어 농담으로 다듬어 들려준다."""
 
     name = "joke"
     description = "짧은 농담을 들려준다"
@@ -27,7 +26,7 @@ class JokeSkill(Skill):
     examples = ["농담 하나 해줘", "썰렁한 농담 해줘", "재밌는 얘기 해줘"]
 
     def __init__(self) -> None:
-        self._groq = GroqEngine()
+        self._engine = ClaudeCliEngine()
 
     def can_handle(self, intent: str, text: str) -> float:
         if any(t in text for t in _TRIGGERS):
@@ -36,7 +35,7 @@ class JokeSkill(Skill):
 
     def execute(self, text: str, context: dict) -> SkillResult:
         original = pyjokes.get_joke(language="en", category="neutral")
-        speech = self._groq.generate(original, system=_SYSTEM_PROMPT)
+        speech = self._engine.generate(original, system=_SYSTEM_PROMPT)
         return SkillResult(
             speech=speech,
             success=True,

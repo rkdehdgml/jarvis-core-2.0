@@ -1,4 +1,4 @@
-from core.engines.groq_engine import GroqEngine
+from core.engines.claude_cli_engine import ClaudeCliEngine
 from core.skill_base import Skill, SkillResult
 
 _TRIGGERS = ["하는 방법", "하는법", "어떻게 하는지", "방법 알려줘", "방법이 뭐야"]
@@ -23,7 +23,7 @@ class HowToSkill(Skill):
     ]
 
     def __init__(self) -> None:
-        self._groq = GroqEngine()
+        self._engine = ClaudeCliEngine()
 
     def can_handle(self, intent: str, text: str) -> float:
         if any(t in text for t in _TRIGGERS):
@@ -31,5 +31,5 @@ class HowToSkill(Skill):
         return 0.0
 
     def execute(self, text: str, context: dict) -> SkillResult:
-        speech = self._groq.generate(text, system=_SYSTEM_PROMPT)
+        speech = self._engine.generate(text, system=_SYSTEM_PROMPT)
         return SkillResult(speech=speech, success=True, data={})

@@ -1,6 +1,6 @@
 import re
 
-from core.engines.groq_engine import GroqEngine
+from core.engines.claude_cli_engine import ClaudeCliEngine
 from core.search_engine import SearchEngine
 from core.skill_base import Skill, SkillResult
 
@@ -43,7 +43,7 @@ _SYSTEM_PROMPT = (
 
 
 class WebSearchSkill(Skill):
-    """날씨/뉴스/환율 등 실시간 정보를 웹에서 검색해 Groq로 요약·답변한다."""
+    """날씨/뉴스/환율 등 실시간 정보를 웹에서 검색해 Claude CLI로 요약·답변한다."""
 
     name = "web_search"
     description = "실시간 웹 정보(날씨, 뉴스, 환율 등)를 검색해서 알려준다"
@@ -52,7 +52,7 @@ class WebSearchSkill(Skill):
 
     def __init__(self) -> None:
         self._search = SearchEngine()
-        self._groq = GroqEngine()
+        self._engine = ClaudeCliEngine()
 
     def can_handle(self, intent: str, text: str) -> float:
         if any(k in text for k in _EXCLUDE_KEYWORDS):
@@ -80,7 +80,7 @@ class WebSearchSkill(Skill):
 
         formatted = self._search.format_results(results)
         prompt = f"사용자 질문: {text}\n\n검색 결과:\n{formatted}"
-        speech = self._groq.generate(prompt, system=_SYSTEM_PROMPT)
+        speech = self._engine.generate(prompt, system=_SYSTEM_PROMPT)
 
         return SkillResult(
             speech=speech,

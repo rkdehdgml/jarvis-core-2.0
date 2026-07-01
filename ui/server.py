@@ -89,10 +89,7 @@ def _event_to_dict(event: StatusEvent) -> dict:
 
 
 def _engine_descriptor() -> dict:
-    """ai_chat 스킬이 실제로 쓰고 있는 엔진(GroqEngine 또는 ClaudeCodeEngine)의
-    describe()를 가져온다. 어느 엔진이 활성인지는 skill_ai_chat.py의 import
-    한 줄로 결정되므로, 여기서는 그 결과만 그대로 중계한다.
-    """
+    """ai_chat 스킬이 쓰고 있는 엔진(ClaudeCliEngine)의 describe()를 가져온다."""
     for skill in _registry.get_all_skills():
         if skill.name == "ai_chat":
             engine = getattr(skill, "_engine", None)

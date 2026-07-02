@@ -66,13 +66,23 @@ class ClaudeCliEngine:
             full_prompt = self._build_prompt(prompt)
         return self._run_safe(full_prompt)
 
-    def _run_safe(self, prompt: str) -> str:
+    def decide(self, prompt: str) -> str:
+        """읽기 전용 판단 모드: Read 툴만 허용해 화면 상태(이미지)를 보고 답하게 한다.
+
+        화면 제어 실행 루프(core/hybrid_screen.py)에서 사용 — Claude는 "다음에 할
+        행동 1개"만 텍스트(JSON)로 결정하고, 실제 클릭·입력 실행은 호출자(Python)가
+        담당한다. Bash·Edit·Write가 필요 없으므로 --dangerously-skip-permissions
+        없이도 동작해 run_task()보다 안전하다.
+        """
+        return self._run_safe(prompt, tools=["Read"])
+
+    def _run_safe(self, prompt: str, tools: list[str] | None = None) -> str:
         try:
             result = subprocess.run(
                 [
                     "claude", "-p", prompt,
                     "--output-format", "json",
-                    "--allowedTools", *_SAFE_TOOLS,
+                    "--allowedTools", *(tools or _SAFE_TOOLS),
                 ],
                 capture_output=True,
                 text=True,

@@ -31,6 +31,16 @@ def main() -> None:
             assert received2["type"] == "output", received2
             assert received2["value"] == "작업 완료", received2
 
+            # 잘못된 JSON과 알 수 없는 type은 예외 없이 조용히 무시되어야 한다 —
+            # 연결이 끊기지 않고 이후 정상 메시지를 계속 수신할 수 있는지로 증명한다.
+            hook_ws.send_text("not valid json")
+            hook_ws.send_text('{"type": "bogus", "value": "x"}')
+            hook_ws.send_text('{"type": "tool_action", "value": "여전히 살아있음"}')
+
+            received3 = browser_ws.receive_json()
+            assert received3["type"] == "tool_action", received3
+            assert received3["value"] == "여전히 살아있음", received3
+
     print("\ntest_ui_hook_broadcast 검증 통과")
 
 

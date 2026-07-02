@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type JarvisState = "idle" | "listening" | "processing" | "responded" | "navigation_request" | "poi_request";
+export type JarvisState = "idle" | "listening" | "processing" | "streaming" | "responded" | "navigation_request" | "poi_request";
 
 export interface ConversationTurn {
   role: "user" | "jarvis";
   text: string;
   timestamp: number;
+  transient?: boolean;   // tool_action 진행 표시용 임시 말풍선
 }
 
 export interface SystemInfo {
@@ -101,6 +102,11 @@ interface WsPushPayload {
   extra?: Record<string, unknown>;
 }
 
+interface HookMessagePayload {
+  type: "tool_action" | "output";
+  value: string;
+}
+
 type HistoryApiResponse = ConversationTurn[];
 
 const API_BASE = "http://127.0.0.1:8765";
@@ -158,11 +164,14 @@ export function useJarvisStatus(): UseJarvisStatusResult {
         usageToday: payload.usageToday,
       };
 
-      if (isNewEvent && payload.state === "responded" && payload.lastResponse) {
-        next.conversationLog = [
-          ...prev.conversationLog,
-          { role: "jarvis", text: payload.lastResponse, timestamp: payload.timestamp },
-        ];
+      if (isNewEvent && payload.state === "responded") {
+        const lastTurn = prev.conversationLog[prev.conversationLog.length - 1];
+        const withoutTransient = lastTurn?.transient
+          ? prev.conversationLog.slice(0, -1)
+          : prev.conversationLog;
+        next.conversationLog = payload.lastResponse
+          ? [...withoutTransient, { role: "jarvis", text: payload.lastResponse, timestamp: payload.timestamp }]
+          : withoutTransient;
       }
 
       return next;
@@ -322,14 +331,45 @@ export function useJarvisStatus(): UseJarvisStatusResult {
     }
   }, []);
 
+  const handleHookMessage = useCallback((msg: HookMessagePayload) => {
+    setStatus((prev) => {
+      const lastTurn = prev.conversationLog[prev.conversationLog.length - 1];
+      const isLastTransient = lastTurn?.transient === true;
+
+      if (msg.type === "tool_action") {
+        const updatedTurn: ConversationTurn = {
+          role: "jarvis",
+          text: msg.value,
+          timestamp: Date.now(),
+          transient: true,
+        };
+        const conversationLog = isLastTransient
+          ? [...prev.conversationLog.slice(0, -1), updatedTurn]
+          : [...prev.conversationLog, updatedTurn];
+        return { ...prev, conversationLog };
+      }
+
+      // type === "output": 임시 말풍선 제거만 한다 — 실제 텍스트는 곧 오는
+      // "responded" 상태 이벤트가 채운다.
+      if (isLastTransient) {
+        return { ...prev, conversationLog: prev.conversationLog.slice(0, -1) };
+      }
+      return prev;
+    });
+  }, []);
+
   const connect = useCallback(() => {
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
 
     ws.onmessage = (event: MessageEvent<string>) => {
       try {
-        const payload = JSON.parse(event.data) as WsPushPayload;
-        handlePush(payload);
+        const payload = JSON.parse(event.data) as WsPushPayload | HookMessagePayload;
+        if ("type" in payload) {
+          handleHookMessage(payload);
+        } else {
+          handlePush(payload);
+        }
       } catch {
         // 파싱 실패한 페이로드는 무시
       }
@@ -343,7 +383,7 @@ export function useJarvisStatus(): UseJarvisStatusResult {
     ws.onerror = () => {
       ws.close();
     };
-  }, [handlePush]);
+  }, [handlePush, handleHookMessage]);
 
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim();

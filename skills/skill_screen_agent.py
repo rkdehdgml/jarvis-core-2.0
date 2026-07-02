@@ -16,6 +16,7 @@ import logging
 
 from core.hybrid_screen import HybridScreenEngine
 from core.skill_base import Skill, SkillResult
+from core.status_events import broadcaster
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,7 @@ class ScreenAgentSkill(Skill):
         except Exception:
             pass
 
+        broadcaster.emit(state="streaming")
         engine = HybridScreenEngine(on_chunk=tts_callback)
         result = engine.run(task=text)
         return SkillResult(speech=result, success=True, data={"task": text})

@@ -10,6 +10,7 @@ main.py 와 같은 프로세스에서 띄우려면 main.py 에서 uvicorn.Server
 별도 스레드/asyncio 태스크로 실행하면 된다 (이 파일은 건드리지 않음).
 """
 import asyncio
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -118,6 +119,21 @@ async def _broadcast(event: StatusEvent) -> None:
         _clients.discard(ws)
 
 
+_HOOK_MESSAGE_TYPES = ("tool_action", "output")
+
+
+async def _broadcast_raw(payload: dict) -> None:
+    """훅(jarvis_send.py)이 보낸 원본 페이로드를 모든 클라이언트에 그대로 중계한다."""
+    dead: list[WebSocket] = []
+    for ws in _clients:
+        try:
+            await ws.send_json(payload)
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        _clients.discard(ws)
+
+
 def _on_status_event(event: StatusEvent) -> None:
     """StatusBroadcaster가 호출하는 동기 콜백.
 
@@ -183,8 +199,16 @@ async def ws_endpoint(websocket: WebSocket) -> None:
 
     try:
         while True:
-            # 클라이언트는 보통 메시지를 보내지 않지만, 연결 유지를 위해 수신 대기.
-            await websocket.receive_text()
+            # 브라우저 클라이언트는 보통 메시지를 보내지 않지만, 훅(jarvis_send.py)은
+            # {"type": "tool_action"|"output", "value": ...}를 보내고 바로 끊는다 —
+            # 수신 즉시 파싱해 다른 클라이언트에 브로드캐스트한다.
+            raw = await websocket.receive_text()
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(data, dict) and data.get("type") in _HOOK_MESSAGE_TYPES:
+                await _broadcast_raw(data)
     except WebSocketDisconnect:
         pass
     finally:

@@ -5,7 +5,7 @@ from typing import Callable, Literal
 
 logger = logging.getLogger(__name__)
 
-State = Literal["idle", "listening", "processing", "responded", "navigation_request"]
+State = Literal["idle", "listening", "processing", "streaming", "responded", "navigation_request"]
 
 
 @dataclass

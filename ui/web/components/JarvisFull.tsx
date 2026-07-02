@@ -11,6 +11,7 @@ const CORE_TEXT: Record<JarvisState, { main: string; sub: string }> = {
   idle: { main: "대기 중", sub: "STANDBY" },
   listening: { main: "듣고 있습니다", sub: "LISTENING" },
   processing: { main: "처리 중...", sub: "PROCESSING" },
+  streaming: { main: "작업 진행 중...", sub: "STREAMING" },
   responded: { main: "응답 완료", sub: "DONE" },
   navigation_request: { main: "경로 검색 중", sub: "NAVIGATING" },
   poi_request: { main: "주변 검색 중", sub: "POI SEARCH" },

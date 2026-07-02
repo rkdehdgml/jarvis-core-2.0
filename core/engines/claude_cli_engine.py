@@ -39,6 +39,33 @@ _ENV_WHITELIST = [
 _SAFE_TOOLS = ["WebSearch", "WebFetch"]
 
 
+class _SentenceBuffer:
+    """텍스트 청크를 모았다가 문장 종결부호를 만나면 on_chunk로 흘려보낸다.
+
+    stream-json의 assistant 텍스트 블록이 문장 중간에서 쪼개져 오면 TTS가
+    어색하게 끊기는 문제를 막기 위함 — 종결부호를 볼 때까지 누적한다.
+    """
+
+    _SENTENCE_END = (".", "!", "?", "。", "\n")
+
+    def __init__(self, on_chunk: Callable[[str], None] | None) -> None:
+        self._on_chunk = on_chunk
+        self._buf = ""
+
+    def feed(self, chunk: str) -> None:
+        self._buf += chunk
+        if self._on_chunk and self._buf.rstrip().endswith(self._SENTENCE_END):
+            sentence = self._buf.strip()
+            if sentence:
+                self._on_chunk(sentence)
+            self._buf = ""
+
+    def flush(self) -> None:
+        if self._on_chunk and self._buf.strip():
+            self._on_chunk(self._buf.strip())
+        self._buf = ""
+
+
 class ClaudeCliEngine:
     """Claude Code CLI를 두 가지 모드로 구동하는 통합 엔진."""
 
@@ -163,6 +190,7 @@ class ClaudeCliEngine:
         stderr_thread.start()
 
         collected: list[str] = []
+        sentence_buffer = _SentenceBuffer(on_chunk)
         try:
             assert proc.stdout
             for raw_line in proc.stdout:
@@ -181,8 +209,7 @@ class ClaudeCliEngine:
                         if isinstance(block, dict) and block.get("type") == "text":
                             chunk = block["text"]
                             collected.append(chunk)
-                            if on_chunk and chunk.strip():
-                                on_chunk(chunk)
+                            sentence_buffer.feed(chunk)
 
                 elif event_type == "result":
                     cost = obj.get("total_cost_usd")
@@ -201,6 +228,7 @@ class ClaudeCliEngine:
                 logger.error("run_task 타임아웃 — 프로세스 강제 종료")
                 proc.kill()
             stderr_thread.join(timeout=2)
+            sentence_buffer.flush()
 
         result = "".join(collected).strip()
         if result:

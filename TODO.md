@@ -18,10 +18,10 @@ WhisperFlow에서 가져오기로 한 기능과 jarvis-core 2.0에 새로 추가
 | 5 | 가상 키보드 출력 | pbcopy + AppleScript → Claude 터미널 붙여넣기 | pyperclip + pyautogui Ctrl+V → 포커스 앱 입력 | ❌ 미구현 |
 | 6 | Always-Listen 상태 머신 | BOOT_WAIT→IDLE→SPEECH→CONV_WAIT | main.py 루프 재설계 | ❌ 미구현 |
 | 7 | TTS 인터럽트 | 없음 (Mac 특성) | 박수 2번 → pygame.mixer 즉시 중단 | ❌ 미구현 |
-| 8 | 스트리밍 TTS | STT→Claude 실시간 스트림 | run_task() 문장 버퍼링 → 즉시 TTS | ❌ 미구현 |
+| 8 | 스트리밍 TTS | STT→Claude 실시간 스트림 | run_task() 문장 버퍼링 → 즉시 TTS | ✅ 완료 |
 | 9 | 실행 중 CLI 세션 주입 | STT를 열린 터미널에 직접 타이핑 | claude --resume 세션 재연결 | ❌ 미구현 |
 | 10 | 오디오 레벨 시각화 | 마이크 레벨 파형 UI 표시 | 웹 대시보드 AudioWave 컴포넌트 | ❌ 미구현 |
-| 11 | UI 실시간 진행 표시 | Claude 응답 스트리밍 실시간 출력 | streaming 상태 + tool_action 이벤트 | ❌ 미구현 |
+| 11 | UI 실시간 진행 표시 | Claude 응답 스트리밍 실시간 출력 | streaming 상태 + tool_action 이벤트 | ✅ 완료 |
 | 12 | skill_virtual_keyboard | 없음 | "이 내용 입력해줘" → 포커스 앱 타이핑 스킬 | ❌ 미구현 |
 | 13 | 실 동작 테스트 | — | uiautomation·Claude CLI·훅 연결 검증 | ❌ 미완료 |
 | 14 | UIA 깊이·요소수 튜닝 | — | 실 앱 테스트 후 _MAX_ELEMENTS 조정 | ❌ 미완료 |
@@ -159,7 +159,7 @@ echo '{"tool_name": "WebSearch", "tool_input": {"query": "날씨"}, "tool_respon
 
 ---
 
-### 🟡 우선순위 3 — 스트리밍·UI 개선
+### 🟡 우선순위 3 — 스트리밍·UI 개선 — ✅ 완료 (위 참고)
 
 #### 3-A. `core/engines/claude_cli_engine.py` — TTS 문장 버퍼링
 현재 `on_chunk` 콜백이 단어/문장 조각 단위로 호출돼 TTS가 어색하게 끊김.  

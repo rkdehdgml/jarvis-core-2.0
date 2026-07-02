@@ -7,6 +7,7 @@ const STATE_LABEL: Record<string, string> = {
   idle: "대기 중",
   listening: "듣고 있습니다",
   processing: "처리 중...",
+  streaming: "작업 진행 중...",
 };
 
 function statusText(currentState: string, lastResponse: string | null): string {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type JarvisState = "idle" | "listening" | "processing" | "responded" | "navigation_request" | "poi_request";
+export type JarvisState = "idle" | "listening" | "processing" | "streaming" | "responded" | "navigation_request" | "poi_request";
 
 export interface ConversationTurn {
   role: "user" | "jarvis";

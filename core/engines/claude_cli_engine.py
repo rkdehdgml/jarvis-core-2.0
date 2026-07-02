@@ -18,6 +18,7 @@ import logging
 import os
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 from typing import Callable
 
@@ -123,6 +124,7 @@ class ClaudeCliEngine:
                     "claude", "-p", prompt,
                     "--dangerously-skip-permissions",
                     "--output-format", "stream-json",
+                    "--verbose",  # CLI가 --output-format=stream-json에 필수로 요구
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -136,6 +138,19 @@ class ClaudeCliEngine:
         except Exception as e:
             logger.error(f"Claude CLI Popen 오류: {e}")
             return f"Claude CLI 실행 오류: {e}"
+
+        # stderr를 별도 스레드로 계속 비워준다 - 안 그러면 파이프가 가득 찼을 때
+        # 자식 프로세스가 write()에서 멈춰버리고(stdout 쪽만 읽는 메인 루프와 교착),
+        # 에러 메시지도 읽지 못한 채 조용히 사라진다.
+        stderr_lines: list[str] = []
+
+        def _drain_stderr() -> None:
+            assert proc.stderr
+            for line in proc.stderr:
+                stderr_lines.append(line)
+
+        stderr_thread = threading.Thread(target=_drain_stderr, daemon=True)
+        stderr_thread.start()
 
         collected: list[str] = []
         try:
@@ -175,8 +190,18 @@ class ClaudeCliEngine:
             except subprocess.TimeoutExpired:
                 logger.error("run_task 타임아웃 — 프로세스 강제 종료")
                 proc.kill()
+            stderr_thread.join(timeout=2)
 
-        return "".join(collected).strip() or "작업을 완료했습니다."
+        result = "".join(collected).strip()
+        if result:
+            return result
+
+        if proc.returncode:
+            err = "".join(stderr_lines).strip()[:300]
+            logger.error(f"claude 비정상 종료 (code={proc.returncode}): {err}")
+            return f"작업 실행 중 오류가 발생했습니다: {err}" if err else "작업 실행에 실패했습니다."
+
+        return "작업을 완료했습니다."
 
     # ── 공통 유틸 ─────────────────────────────────────────────────────────────
 

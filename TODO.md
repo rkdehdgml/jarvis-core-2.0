@@ -77,6 +77,27 @@ WhisperFlow에서 가져오기로 한 기능과 jarvis-core 2.0에 새로 추가
       `ui/server.py`의 `/ws`가 클라이언트→서버 수신 메시지를 아직 브로드캐스트하지 않기 때문
       (우선순위 3-C에서 구현 예정, 회귀 아님).
 
+### 회귀 전수 테스트 (2026-07-02, 이 PC 새 환경에서 재검증)
+40개 스킬 전체 로딩, 기존 `tests/` 32개 스크립트, `ClaudeCliEngine.describe/ask/run_task()`,
+`hybrid_screen.py` UIA 수집·스크린샷·정리, 훅 2종, `main.py --text` 엔드투엔드까지 전부
+재실행. 발견·수정한 버그 3건:
+- **`main.py` 크래시** — `_run_text_loop()`의 `print(result.speech)`가 콘솔 코드페이지(cp949)로
+  인코딩 불가한 문자(위키백과 요약에 섞여 나오는 IPA 발음 기호 등)를 만나면
+  `UnicodeEncodeError`로 프로그램 전체가 죽음. `main()` 시작부에
+  `sys.stdout/stderr.reconfigure(errors="replace")` 추가로 수정 — 크래시 대신 `?`로 대체.
+- **`main.py` stdin 인코딩 미설정** — stdin이 파이프로 리다이렉트되는 경우(자동화 스크립트 등)
+  Python이 로케일 코드페이지(cp949)로 UTF-8 입력을 잘못 디코드해 한글이 깨지고,
+  `"종료"` 같은 정확 일치 명령이 실패해 AI 폴백으로 새고 결국 stdin EOF로 크래시까지 이어짐.
+  `sys.stdin.reconfigure(encoding="utf-8", errors="replace")` 추가로 수정 (실제 콘솔 인터랙티브
+  입력은 Windows 콘솔 API를 타므로 영향 없음, 리다이렉트된 입력에서만 적용됨).
+- **`uiautomation` 패키지 미설치** — `requirements.txt`엔 있었지만 이 PC의 `.venv`엔 실제로
+  설치돼 있지 않아 UIA 수집이 항상 빈 리스트로 폴백 중이었음 (기존 2-A 검증은 다른 PC에서
+  했던 것으로 추정). `pip install uiautomation>=2.0.18`로 재설치 후 크롬 창에서 25~52개 요소
+  정상 수집 확인.
+
+`tests/test_skill_wikipedia.py`도 동일한 cp949 인코딩 문제로 테스트 자체가 죽던 것을
+`sys.stdout.reconfigure(errors="replace")` 추가로 함께 수정.
+
 ---
 
 ## 남은 작업

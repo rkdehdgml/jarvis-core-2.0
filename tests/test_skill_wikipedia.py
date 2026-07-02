@@ -2,7 +2,13 @@
 
 실행: python -m tests.test_skill_wikipedia  (프로젝트 루트에서)
 """
+import sys
+
 from skills.skill_wikipedia import WikipediaSkill
+
+# 위키백과 요약에는 IPA 발음 기호 등 Windows 콘솔 코드페이지(cp949)로 인코딩할 수
+# 없는 문자가 섞여 나올 수 있다 (main.py도 동일한 이유로 stdout을 보정한다).
+sys.stdout.reconfigure(errors="replace")
 
 
 def main() -> None:

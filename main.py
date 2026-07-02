@@ -11,6 +11,7 @@
 """
 import argparse
 import logging
+import sys
 import threading
 
 import uvicorn
@@ -163,6 +164,18 @@ def _run_voice_loop(router: Router, dispatcher: Dispatcher, context: Conversatio
 
 
 def main() -> None:
+    # Windows 콘솔 코드페이지(cp949 등)로 인코딩 불가한 문자(위키백과 요약의 IPA 발음
+    # 기호 등)가 스킬 응답에 섞여 들어오면 print()가 UnicodeEncodeError로 죽는다 —
+    # 크래시 대신 '?'로 대체해 항상 응답을 표시하게 한다.
+    sys.stdout.reconfigure(errors="replace")
+    sys.stderr.reconfigure(errors="replace")
+    # stdin이 실제 콘솔(interactive tty)일 때는 input()이 Windows 콘솔 API를 통해
+    # 인코딩과 무관하게 정상적으로 읽으므로 이 설정은 영향이 없다. stdin이 파이프로
+    # 리다이렉트된 경우(자동화 스크립트·CI 등)에만 적용되며, 이때 기본 로케일
+    # 코드페이지(cp949)로 UTF-8 바이트를 읽으면 한글이 깨져 "종료" 같은 명령도
+    # 문자열 일치에 실패하는 문제를 방지한다.
+    sys.stdin.reconfigure(encoding="utf-8", errors="replace")
+
     parser = argparse.ArgumentParser(description="jarvis-core")
     parser.add_argument(
         "--text", action="store_true", help="마이크 없이 콘솔 텍스트 입출력으로 실행"

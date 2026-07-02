@@ -14,6 +14,7 @@ import logging
 
 from core.engines.claude_cli_engine import ClaudeCliEngine
 from core.skill_base import Skill, SkillResult
+from core.status_events import broadcaster
 
 logger = logging.getLogger(__name__)
 
@@ -52,5 +53,6 @@ class AgentSkill(Skill):
         except Exception:
             pass
 
+        broadcaster.emit(state="streaming")
         result = self._engine.run_task(text, on_chunk=tts_callback)
         return SkillResult(speech=result, success=True, data={"task": text})

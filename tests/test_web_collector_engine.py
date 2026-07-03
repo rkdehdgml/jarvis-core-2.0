@@ -157,13 +157,57 @@ def test_clamp_wait_seconds() -> None:
     print("test_clamp_wait_seconds 통과")
 
 
+def test_build_decision_prompt_includes_task_and_elements() -> None:
+    from core.web_collector import WebElement, _build_decision_prompt
+
+    elements = [WebElement(idx=1, tag="input", type="search", role="", text="검색어")]
+    prompt = _build_decision_prompt(
+        task="노트북 검색해줘",
+        elements=elements,
+        history=["1) 이동: https://example.com"],
+        url="https://example.com",
+    )
+
+    assert "노트북 검색해줘" in prompt, "목표가 프롬프트에 없음"
+    assert "https://example.com" in prompt, "URL이 프롬프트에 없음"
+    assert "1) 이동" in prompt, "history가 프롬프트에 없음"
+    assert '"번호": 1' in prompt, "요소 목록이 프롬프트에 없음"
+
+    print("test_build_decision_prompt_includes_task_and_elements 통과")
+
+
+def test_parse_action_extracts_json_from_markdown_fence() -> None:
+    from core.web_collector import _parse_action
+
+    raw = '```json\n{"action": "click", "idx": 3}\n```'
+    action = _parse_action(raw)
+    assert action == {"action": "click", "idx": 3}, f"파싱 결과 불일치: {action}"
+
+    print("test_parse_action_extracts_json_from_markdown_fence 통과")
+
+
+def test_parse_action_raises_on_missing_action_field() -> None:
+    from core.web_collector import _parse_action
+
+    try:
+        _parse_action('{"idx": 3}')
+        assert False, "action 필드가 없는데도 예외가 발생하지 않음"
+    except ValueError:
+        pass
+
+    print("test_parse_action_raises_on_missing_action_field 통과")
+
+
 def main() -> None:
     test_collect_elements()
     test_execute_click_and_type()
     test_execute_click_blocks_irreversible_action()
     test_execute_extract_appends_record()
     test_clamp_wait_seconds()
-    print("\ntest_web_collector_engine (Task 1-2) 검증 통과")
+    test_build_decision_prompt_includes_task_and_elements()
+    test_parse_action_extracts_json_from_markdown_fence()
+    test_parse_action_raises_on_missing_action_field()
+    print("\ntest_web_collector_engine (Task 1-3) 검증 통과")
 
 
 if __name__ == "__main__":

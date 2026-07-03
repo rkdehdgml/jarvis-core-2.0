@@ -52,6 +52,44 @@ def test_collect_elements() -> None:
     print("test_collect_elements 통과")
 
 
+def test_collect_elements_excludes_visually_hidden_shims() -> None:
+    """실사용 중 발견된 버그: 접근성용으로 화면에서 숨긴 네이티브 <select>가
+    '클릭 가능한 요소'로 수집되면, 사람은 절대 못 누르는 요소를 클로드가
+    클릭 대상으로 고르게 되고 Playwright가 "element is outside of the
+    viewport"로 매번 실패한다 (네이버 부동산 지역선택 select.selectbox-source
+    에서 실제로 재현됨). 진짜 클릭 가능한 요소만 수집돼야 한다.
+    """
+    from playwright.sync_api import sync_playwright
+
+    html = """
+    <html><body>
+      <button>보이는 버튼</button>
+      <select title="clip 트릭" style="position:absolute; width:1px; height:1px; overflow:hidden;">
+        <option>1</option>
+      </select>
+      <select title="화면밖 트릭" style="position:absolute; left:-9999px; top:-9999px; width:100px; height:20px;">
+        <option>2</option>
+      </select>
+    </body></html>
+    """
+
+    engine = WebCollectorEngine(headless=True)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        try:
+            page.set_content(html)
+            elements = engine._collect_elements(page)
+
+            tags = [el.tag for el in elements]
+            assert "button" in tags, f"보이는 버튼이 수집되지 않음: {tags}"
+            assert "select" not in tags, f"화면에 안 보이는 select가 수집됨: {tags}"
+        finally:
+            browser.close()
+
+    print("test_collect_elements_excludes_visually_hidden_shims 통과")
+
+
 def test_execute_click_and_type() -> None:
     from playwright.sync_api import sync_playwright
 
@@ -334,6 +372,7 @@ def test_run_loop_max_steps_cutoff() -> None:
 
 def main() -> None:
     test_collect_elements()
+    test_collect_elements_excludes_visually_hidden_shims()
     test_execute_click_and_type()
     test_execute_click_blocks_irreversible_action()
     test_execute_extract_appends_record()

@@ -51,6 +51,13 @@ _COLLECT_JS = """
     if (rect.width <= 0 || rect.height <= 0) continue;
     const style = window.getComputedStyle(el);
     if (style.visibility === 'hidden' || style.display === 'none') continue;
+    // 접근성용으로 화면에서만 숨긴 네이티브 컨트롤 제외 - 실제 사이트(네이버
+    // 부동산 지역선택 select.selectbox-source)에서 재현된 문제: rect가
+    // width/height>0을 반환해도 1px 클립이나 -9999px 오프스크린 배치로 사람은
+    // 절대 못 누르는 요소가 있다. Playwright도 이런 요소는 클릭을 거부한다
+    // (element is outside of the viewport) - 클로드에게 애초에 보여주지 않는다.
+    if (rect.width < 3 || rect.height < 3) continue;
+    if (rect.right < 0 || rect.bottom < 0) continue;
     idx += 1;
     el.setAttribute('data-jarvis-idx', String(idx));
     const text = (el.innerText || el.value || el.placeholder ||

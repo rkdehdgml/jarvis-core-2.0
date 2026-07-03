@@ -276,10 +276,10 @@ def test_run_loop_end_to_end() -> None:
                 self._script = list(script)
                 self.calls = 0
 
-            def decide(self, prompt, session_id=None):
+            def decide(self, prompt):
                 self.calls += 1
                 action = self._script.pop(0) if self._script else {"action": "fail", "message": "스크립트 소진"}
-                return json.dumps(action, ensure_ascii=False), "fake-session"
+                return json.dumps(action, ensure_ascii=False)
 
         saved = {}
 
@@ -316,9 +316,9 @@ def test_run_loop_max_steps_cutoff() -> None:
         def __init__(self):
             self.calls = 0
 
-        def decide(self, prompt, session_id=None):
+        def decide(self, prompt):
             self.calls += 1
-            return json.dumps({"action": "wait", "seconds": 0.1}), "fake-session"
+            return json.dumps({"action": "wait", "seconds": 0.1})
 
     engine = WebCollectorEngine(headless=True)
     fake_engine = _FakeEngine()

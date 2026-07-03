@@ -3,7 +3,8 @@
 skill_agent.py(클로드 내장 WebFetch — 정적 HTML만)가 다루지 못하는 자바스크립트
 렌더링·로그인·필터·페이지네이션이 필요한 사이트에서, 실제 브라우저(Chromium)로
 검색·수집·필터링·확인을 수행한다. 구매·결제·삭제 같은 되돌릴 수 없는 액션은
-core/web_collector.py가 코드 레벨에서 차단한다 (이 스킬의 범위 밖).
+core/web_collector.py가 요소 텍스트 키워드 매칭으로 최선의 노력을 다해 차단한다
+(완벽한 보장은 아니다 — 다르게 표기된 컨트롤은 통과할 수 있다. 이 스킬의 범위 밖).
 
 트리거 예시:
   "네이버 부동산에서 대전 서구 아파트 매물 수집해줘"
@@ -60,5 +61,13 @@ class WebCollectorSkill(Skill):
 
         broadcaster.emit(state="streaming")
         engine = WebCollectorEngine(on_chunk=tts_callback)
-        result = engine.run(task=text)
+        try:
+            result = engine.run(task=text)
+        except Exception as e:
+            logger.error(f"웹 수집 엔진 오류: {e}")
+            return SkillResult(
+                speech=f"웹 수집 중 오류가 발생했습니다: {e}",
+                success=False,
+                data={"task": text},
+            )
         return SkillResult(speech=result, success=True, data={"task": text})

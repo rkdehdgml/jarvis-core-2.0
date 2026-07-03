@@ -159,8 +159,9 @@ input text -> Router.route() -> Skill | None -> Dispatcher.dispatch() -> SkillRe
   없어 매 스텝 Read 툴 왕복이 필요 없고 `hybrid_screen.py`보다 스텝당 빠르다. `skill_agent.py`의 내장
   `WebFetch`가 다루지 못하는 자바스크립트 렌더링/로그인/필터/페이지네이션이 필요한 사이트(부동산, 쇼핑몰,
   중고거래 등)를 대상으로 하며, 구매·결제·삭제·전송·제출처럼 되돌릴 수 없는 액션은 요소 텍스트에 그런
-  키워드가 보이면 클로드의 판단과 무관하게 코드 레벨에서 강제 차단한다(`_IRREVERSIBLE_ACTION_KEYWORDS`) —
-  `hybrid_screen.py`의 잠금화면 클릭 사고 사례와 동일한 이유. 로그인 세션은 Playwright의
+  키워드가 보이면 클로드의 판단과 무관하게 최선의 노력으로 차단한다(`_IRREVERSIBLE_ACTION_KEYWORDS`) —
+  `hybrid_screen.py`의 잠금화면 클릭 사고 사례와 동일한 이유. 단, 이는 텍스트 라벨 키워드 매칭일 뿐 완벽한
+  보장은 아니다 — 다르게 표기되었거나 아이콘만 있는 컨트롤은 통과할 수 있다. 로그인 세션은 Playwright의
   `storage_state`를 `data/web_collector_state.json`에 저장해 재사용한다. 라우터 스코어링은
   `skill_agent.py`와 겹치는 "수집해줘"류 트리거에서 사이트 이름(부동산/쇼핑몰 등)까지 함께 있으면 이
   스킬이 더 높은 점수(0.93 > 0.9)로 우선한다 — 실제 렌더링이 필요할 가능성이 높다는 신호로 사용.

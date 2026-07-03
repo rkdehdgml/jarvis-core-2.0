@@ -333,7 +333,7 @@ def test_run_loop_end_to_end() -> None:
             fake_engine = _FakeEngine(script)
             engine._engine = fake_engine
 
-            result = engine.run(task="노트북 A 정보 수집해줘")
+            result = engine.run(task="노트북 A 정보 수집해서 엑셀로 저장해줘")
 
             assert fake_engine.calls == 3, f"decide() 호출 횟수 불일치: {fake_engine.calls}"
             assert "1건 수집 완료" in result, f"결과 메시지에 done 메시지 누락: {result}"
@@ -347,6 +347,58 @@ def test_run_loop_end_to_end() -> None:
         server.server_close()
 
     print("test_run_loop_end_to_end 통과")
+
+
+def test_run_loop_without_save_keyword_summarizes_inline() -> None:
+    """'저장해줘'류 요청이 없으면 xlsx를 만들지 않고 대화 응답에 바로 요약한다.
+
+    "네이버에 대전날씨 검색해줘" 같은 단순 조회에서까지 매번 엑셀 파일이
+    생기는 게 불편하다는 실사용 피드백으로 추가된 동작.
+    """
+    import skills.agent_tools.file_tool as file_tool_mod
+
+    html = '<html><body><li class="title">노트북 A</li><li class="price">100000</li></body></html>'
+    server = _serve_html(html)
+    try:
+        url = f"http://127.0.0.1:{server.server_port}/"
+        script = [
+            {"action": "navigate", "url": url},
+            {"action": "extract", "record": {"제목": 1, "가격": 2}},
+            {"action": "done", "message": "확인했습니다."},
+        ]
+
+        class _FakeEngine:
+            def __init__(self, script):
+                self._script = list(script)
+
+            def decide(self, prompt, session_id=None):
+                action = self._script.pop(0) if self._script else {"action": "fail", "message": "스크립트 소진"}
+                return json.dumps(action, ensure_ascii=False), "fake-session"
+
+        save_calls = []
+
+        def _fake_save_xlsx(rows, headers=None, filename=""):
+            save_calls.append((rows, headers))
+            return {"ok": True, "data": "C:\\fake\\jarvis_test.xlsx", "error": ""}
+
+        original_save = file_tool_mod.save_xlsx
+        file_tool_mod.save_xlsx = _fake_save_xlsx
+        try:
+            engine = WebCollectorEngine(headless=True)
+            engine._engine = _FakeEngine(script)
+
+            result = engine.run(task="노트북 A 가격 확인해줘")
+
+            assert save_calls == [], f"저장 요청이 없는데 xlsx가 생성됨: {save_calls}"
+            assert "확인했습니다." in result, f"결과 메시지에 done 메시지 누락: {result}"
+            assert "노트북 A" in result and "100000" in result, f"수집 내용이 응답에 요약되지 않음: {result}"
+        finally:
+            file_tool_mod.save_xlsx = original_save
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    print("test_run_loop_without_save_keyword_summarizes_inline 통과")
 
 
 def test_run_loop_max_steps_cutoff() -> None:
@@ -382,6 +434,7 @@ def main() -> None:
     test_parse_action_raises_on_missing_action_field()
     test_storage_state_roundtrip()
     test_run_loop_end_to_end()
+    test_run_loop_without_save_keyword_summarizes_inline()
     test_run_loop_max_steps_cutoff()
     print("\ntest_web_collector_engine (Task 1-5) 검증 통과")
 

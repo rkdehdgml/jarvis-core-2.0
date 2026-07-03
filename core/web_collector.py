@@ -38,6 +38,29 @@ _IRREVERSIBLE_ACTION_KEYWORDS = [
     "구매", "결제", "신청하기", "삭제", "전송", "제출", "탈퇴",
 ]
 
+# skill_agent.py의 _SAVE_KEYWORDS와 같은 관례 - "네이버에 대전날씨 검색해줘"처럼
+# 단순 조회에는 매번 파일이 생기지 않게, 사용자가 명시적으로 저장을 요청했을
+# 때만 xlsx를 만든다. 그 외에는 수집한 내용을 대화 응답에 바로 요약한다.
+_SAVE_KEYWORDS = ["저장해줘", "저장해서", "엑셀로", "파일로 만들어줘", "파일로 정리", "텍스트 파일로", "파일로 저장"]
+
+_SUMMARY_RECORD_LIMIT = 10  # 대화 응답에 바로 요약할 때 읽어줄 최대 건수
+
+
+def _wants_file_save(task: str) -> bool:
+    return any(kw in task for kw in _SAVE_KEYWORDS)
+
+
+def _summarize_records(records: list[dict]) -> str:
+    lines = [
+        ", ".join(f"{field}: {value}" for field, value in record.items())
+        for record in records[:_SUMMARY_RECORD_LIMIT]
+    ]
+    summary = " / ".join(lines)
+    remaining = len(records) - _SUMMARY_RECORD_LIMIT
+    if remaining > 0:
+        summary += f" 외 {remaining}건 더"
+    return summary
+
 _COLLECT_JS = """
 () => {
   const SEL = 'a, button, input, select, textarea, [role="button"], [role="link"], ' +
@@ -152,9 +175,10 @@ class WebCollectorEngine:
                         logger.info(f"[web-collector step {step}] {outcome}")
 
                         if action.get("action") in ("done", "fail"):
-                            return self._finish(action, records)
+                            return self._finish(task, action, records)
 
                     return self._finish(
+                        task,
                         {"message": f"최대 {_MAX_STEPS}단계 안에 작업을 끝내지 못했습니다."},
                         records,
                     )
@@ -164,10 +188,13 @@ class WebCollectorEngine:
             finally:
                 browser.close()
 
-    def _finish(self, action: dict, records: list[dict]) -> str:
+    def _finish(self, task: str, action: dict, records: list[dict]) -> str:
         message = str(action.get("message") or "")
         if not records:
             return message or "수집된 데이터가 없습니다."
+
+        if not _wants_file_save(task):
+            return f"{message} {_summarize_records(records)}".strip()
 
         from skills.agent_tools.file_tool import save_xlsx
         headers = list(records[0].keys())

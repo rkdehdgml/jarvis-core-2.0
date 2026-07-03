@@ -165,6 +165,9 @@ input text -> Router.route() -> Skill | None -> Dispatcher.dispatch() -> SkillRe
   `storage_state`를 `data/web_collector_state.json`에 저장해 재사용한다. 라우터 스코어링은
   `skill_agent.py`와 겹치는 "수집해줘"류 트리거에서 사이트 이름(부동산/쇼핑몰 등)까지 함께 있으면 이
   스킬이 더 높은 점수(0.93 > 0.9)로 우선한다 — 실제 렌더링이 필요할 가능성이 높다는 신호로 사용.
+  결과는 `skill_agent.py`의 `_SAVE_KEYWORDS`와 같은 관례로 태스크 문장에 "저장해줘"/"엑셀로" 같은
+  명시적 요청이 있을 때만 xlsx로 저장하고(`_wants_file_save()`), 그 외에는 수집한 레코드를 응답
+  문장에 바로 요약해 넣는다(`_summarize_records()`) — 단순 조회마다 파일이 남는 걸 막기 위함.
 
 ### Two independent runtime entry points
 

@@ -21,3 +21,6 @@ data/qr/
 data/youtube_downloads/
 data/captures/
 data/pdf_audio/
+
+# 로컬 git worktree 작업 공간 (superpowers:using-git-worktrees)
+.worktrees/

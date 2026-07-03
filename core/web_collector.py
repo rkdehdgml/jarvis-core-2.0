@@ -117,6 +117,7 @@ class WebCollectorEngine:
 
         records: list[dict] = []
         history: list[str] = []
+        session_id: str | None = None
 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=self._headless)
@@ -128,7 +129,7 @@ class WebCollectorEngine:
                         elements = self._collect_elements(page)
                         url_for_prompt = "" if page.url == "about:blank" else page.url
                         prompt = _build_decision_prompt(task, elements, history, url_for_prompt)
-                        raw = self._get_engine().decide(prompt)
+                        raw, session_id = self._get_engine().decide(prompt, session_id=session_id)
 
                         try:
                             action = _parse_action(raw)

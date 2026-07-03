@@ -165,6 +165,7 @@ class HybridScreenEngine:
         self._launched_apps = set()
 
         history: list[str] = []
+        session_id: str | None = None
         for step in range(1, _MAX_STEPS + 1):
             self._reactivate_target()
             elements = self._collect_uia()
@@ -172,7 +173,7 @@ class HybridScreenEngine:
             try:
                 image_path = annotated_path or orig_path
                 prompt = self._build_decision_prompt(task, elements, image_path, history)
-                raw = self._get_engine().decide(prompt)
+                raw, session_id = self._get_engine().decide(prompt, session_id=session_id)
 
                 try:
                     action = _parse_action(raw)
@@ -206,7 +207,8 @@ class HybridScreenEngine:
         try:
             image_path = annotated_path or orig_path
             prompt = self._build_describe_prompt(question, elements, image_path)
-            return self._get_engine().decide(prompt)
+            raw, _ = self._get_engine().decide(prompt)
+            return raw
         finally:
             _cleanup(orig_path)
             if annotated_path != orig_path:

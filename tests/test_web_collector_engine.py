@@ -3,6 +3,10 @@
 실행: python -m tests.test_web_collector_engine  (프로젝트 루트에서)
 Playwright + Chromium이 설치되어 있어야 한다 (playwright install chromium).
 """
+import http.server
+import json
+import threading
+
 from core.web_collector import WebCollectorEngine
 
 
@@ -226,6 +230,108 @@ def test_storage_state_roundtrip() -> None:
     print("test_storage_state_roundtrip 통과")
 
 
+class _FixtureHTTPHandler(http.server.BaseHTTPRequestHandler):
+    html_body = b""
+
+    def do_GET(self) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(self.html_body)
+
+    def log_message(self, format, *args) -> None:
+        pass
+
+
+def _serve_html(html: str) -> http.server.HTTPServer:
+    """테스트용 픽스처 HTML을 127.0.0.1의 임시 포트로 서빙한다.
+
+    Chromium은 최신 버전에서 최상위 프레임의 data: URL 직접 탐색을 보안상 막는
+    경우가 있어(crbug.com/1231433), 실제 HTTP 내비게이션으로 navigate 액션을
+    검증한다 — 프로덕션에서도 항상 http(s):// 사이트로만 이동하므로 이쪽이 더
+    실제 동작에 가깝다.
+    """
+    handler_cls = type("_Handler", (_FixtureHTTPHandler,), {"html_body": html.encode("utf-8")})
+    server = http.server.HTTPServer(("127.0.0.1", 0), handler_cls)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server
+
+
+def test_run_loop_end_to_end() -> None:
+    import skills.agent_tools.file_tool as file_tool_mod
+
+    html = '<html><body><li class="title">노트북 A</li><li class="price">100000</li></body></html>'
+    server = _serve_html(html)
+    try:
+        url = f"http://127.0.0.1:{server.server_port}/"
+        script = [
+            {"action": "navigate", "url": url},
+            {"action": "extract", "record": {"제목": 1, "가격": 2}},
+            {"action": "done", "message": "1건 수집 완료"},
+        ]
+
+        class _FakeEngine:
+            def __init__(self, script):
+                self._script = list(script)
+                self.calls = 0
+
+            def decide(self, prompt, session_id=None):
+                self.calls += 1
+                action = self._script.pop(0) if self._script else {"action": "fail", "message": "스크립트 소진"}
+                return json.dumps(action, ensure_ascii=False), "fake-session"
+
+        saved = {}
+
+        def _fake_save_xlsx(rows, headers=None, filename=""):
+            saved["rows"] = rows
+            saved["headers"] = headers
+            return {"ok": True, "data": "C:\\fake\\jarvis_test.xlsx", "error": ""}
+
+        original_save = file_tool_mod.save_xlsx
+        file_tool_mod.save_xlsx = _fake_save_xlsx
+        try:
+            engine = WebCollectorEngine(headless=True)
+            fake_engine = _FakeEngine(script)
+            engine._engine = fake_engine
+
+            result = engine.run(task="노트북 A 정보 수집해줘")
+
+            assert fake_engine.calls == 3, f"decide() 호출 횟수 불일치: {fake_engine.calls}"
+            assert "1건 수집 완료" in result, f"결과 메시지에 done 메시지 누락: {result}"
+            assert "jarvis_test.xlsx" in result, f"결과 메시지에 저장 경로 누락: {result}"
+            assert saved["headers"] == ["제목", "가격"], f"헤더 불일치: {saved['headers']}"
+            assert saved["rows"] == [["노트북 A", "100000"]], f"행 데이터 불일치: {saved['rows']}"
+        finally:
+            file_tool_mod.save_xlsx = original_save
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    print("test_run_loop_end_to_end 통과")
+
+
+def test_run_loop_max_steps_cutoff() -> None:
+    class _FakeEngine:
+        def __init__(self):
+            self.calls = 0
+
+        def decide(self, prompt, session_id=None):
+            self.calls += 1
+            return json.dumps({"action": "wait", "seconds": 0.1}), "fake-session"
+
+    engine = WebCollectorEngine(headless=True)
+    fake_engine = _FakeEngine()
+    engine._engine = fake_engine
+
+    result = engine.run(task="절대 안 끝나는 태스크")
+
+    assert fake_engine.calls == 15, f"최대 스텝을 넘겨 호출됨: {fake_engine.calls}"
+    assert "끝내지 못했습니다" in result, f"타임아웃 메시지 누락: {result}"
+
+    print("test_run_loop_max_steps_cutoff 통과")
+
+
 def main() -> None:
     test_collect_elements()
     test_execute_click_and_type()
@@ -236,7 +342,9 @@ def main() -> None:
     test_parse_action_extracts_json_from_markdown_fence()
     test_parse_action_raises_on_missing_action_field()
     test_storage_state_roundtrip()
-    print("\ntest_web_collector_engine (Task 1-4) 검증 통과")
+    test_run_loop_end_to_end()
+    test_run_loop_max_steps_cutoff()
+    print("\ntest_web_collector_engine (Task 1-5) 검증 통과")
 
 
 if __name__ == "__main__":

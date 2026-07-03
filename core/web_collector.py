@@ -101,6 +101,70 @@ class WebCollectorEngine:
             self._engine = ClaudeCliEngine(timeout=600)
         return self._engine
 
+    # -- 공개 진입점 -------------------------------------------------------
+
+    def run(self, task: str) -> str:
+        """관찰→판단→실행을 반복하며 데이터를 검색·수집한다 (읽기 전용).
+
+        매 스텝 Playwright로 현재 페이지의 DOM 요소를 텍스트로 뽑아 클로드에게
+        "행동 1개"만 JSON으로 판단하게 한 뒤, 실행은 이 메서드가 직접 담당한다.
+        """
+        from playwright.sync_api import sync_playwright
+
+        records: list[dict] = []
+        history: list[str] = []
+        session_id: str | None = None
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=self._headless)
+            try:
+                context = browser.new_context(storage_state=self._load_storage_state())
+                page = context.new_page()
+                try:
+                    for step in range(1, _MAX_STEPS + 1):
+                        elements = self._collect_elements(page)
+                        prompt = _build_decision_prompt(task, elements, history, page.url)
+                        raw, session_id = self._get_engine().decide(prompt, session_id=session_id)
+
+                        try:
+                            action = _parse_action(raw)
+                        except ValueError as e:
+                            logger.warning(f"행동 파싱 실패 (step {step}): {e}")
+                            history.append(f"{step}) 판단 결과를 해석하지 못함 - 재시도")
+                            continue
+
+                        outcome = self._execute_action(action, elements, page, records)
+                        if self._on_chunk:
+                            self._on_chunk(outcome)
+                        history.append(f"{step}) {outcome}")
+                        logger.info(f"[web-collector step {step}] {outcome}")
+
+                        if action.get("action") in ("done", "fail"):
+                            return self._finish(action, records)
+
+                    return self._finish(
+                        {"message": f"최대 {_MAX_STEPS}단계 안에 작업을 끝내지 못했습니다."},
+                        records,
+                    )
+                finally:
+                    self._save_storage_state(context)
+                    context.close()
+            finally:
+                browser.close()
+
+    def _finish(self, action: dict, records: list[dict]) -> str:
+        message = str(action.get("message") or "")
+        if not records:
+            return message or "수집된 데이터가 없습니다."
+
+        from skills.agent_tools.file_tool import save_xlsx
+        headers = list(records[0].keys())
+        rows = [[record.get(h, "") for h in headers] for record in records]
+        result = save_xlsx(rows, headers=headers)
+        if result["ok"]:
+            return f"{message} {len(records)}건을 {result['data']}에 저장했습니다.".strip()
+        return f"{message} (파일 저장 실패: {result['error']})".strip()
+
     # -- DOM 수집 레이어 -----------------------------------------------------
 
     def _collect_elements(self, page) -> list[WebElement]:

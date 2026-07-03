@@ -22,6 +22,7 @@ the "why" behind a structural decision — this file only covers the "what" and 
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+playwright install chromium   # skill_web_collector 최초 1회 필요 (브라우저 바이너리 설치)
 
 # Run (voice mode: wakeword "자비스" → STT → route/dispatch → TTS)
 python main.py

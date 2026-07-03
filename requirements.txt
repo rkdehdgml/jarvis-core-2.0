@@ -62,3 +62,7 @@ openpyxl>=3.1            # agent_tools/file_tool (xlsx 저장)
 pyautogui>=0.9.54        # 스크린샷 캡처 + 마우스·키보드 제어
 Pillow>=10.0             # SoM 번호 오버레이 이미지 생성
 uiautomation>=2.0.18     # Windows UI Automation API — 요소 트리·좌표·상태 접근
+
+# 웹 수집 에이전트 (core/web_collector.py + skills/skill_web_collector.py)
+# 전략: Playwright DOM 스냅샷(텍스트) + Claude 판단 — 스크린샷/Vision 없이 관찰-판단-실행
+playwright>=1.42        # 실제 브라우저(Chromium) 제어 — 최초 1회 `playwright install chromium` 별도 필요

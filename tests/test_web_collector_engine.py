@@ -48,9 +48,122 @@ def test_collect_elements() -> None:
     print("test_collect_elements 통과")
 
 
+def test_execute_click_and_type() -> None:
+    from playwright.sync_api import sync_playwright
+
+    html = """
+    <html><body>
+      <input type="search" placeholder="검색어" />
+      <button onclick="window.__clicked = true">검색</button>
+    </body></html>
+    """
+
+    engine = WebCollectorEngine(headless=True)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        try:
+            page.set_content(html)
+            elements = engine._collect_elements(page)
+            records: list = []
+
+            input_el = next(el for el in elements if el.tag == "input")
+            outcome = engine._execute_action(
+                {"action": "type", "idx": input_el.idx, "text": "노트북"}, elements, page, records
+            )
+            assert "입력" in outcome, f"입력 outcome 형식 불일치: {outcome}"
+            value = page.evaluate(f'document.querySelector(\'[data-jarvis-idx="{input_el.idx}"]\').value')
+            assert value == "노트북", f"입력값이 반영 안 됨: {value}"
+
+            button_el = next(el for el in elements if el.tag == "button")
+            outcome = engine._execute_action(
+                {"action": "click", "idx": button_el.idx}, elements, page, records
+            )
+            assert "클릭" in outcome, f"클릭 outcome 형식 불일치: {outcome}"
+            clicked = page.evaluate("window.__clicked")
+            assert clicked is True, "버튼 클릭이 실제로 실행되지 않음"
+        finally:
+            browser.close()
+
+    print("test_execute_click_and_type 통과")
+
+
+def test_execute_click_blocks_irreversible_action() -> None:
+    from playwright.sync_api import sync_playwright
+
+    html = '<html><body><button onclick="window.__clicked = true">구매하기</button></body></html>'
+
+    engine = WebCollectorEngine(headless=True)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        try:
+            page.set_content(html)
+            elements = engine._collect_elements(page)
+            button_el = elements[0]
+
+            outcome = engine._execute_action(
+                {"action": "click", "idx": button_el.idx}, elements, page, []
+            )
+            assert "거부" in outcome, f"위험 액션이 차단되지 않음: {outcome}"
+            clicked = page.evaluate("window.__clicked")
+            assert clicked is None, "차단됐어야 할 클릭이 실제로 실행됨"
+        finally:
+            browser.close()
+
+    print("test_execute_click_blocks_irreversible_action 통과")
+
+
+def test_execute_extract_appends_record() -> None:
+    from playwright.sync_api import sync_playwright
+
+    html = """
+    <html><body>
+      <li class="title">노트북 A</li>
+      <li class="price">100000</li>
+    </body></html>
+    """
+
+    engine = WebCollectorEngine(headless=True)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        try:
+            page.set_content(html)
+            elements = engine._collect_elements(page)
+            title_el = next(el for el in elements if el.text == "노트북 A")
+            price_el = next(el for el in elements if el.text == "100000")
+            records: list = []
+
+            outcome = engine._execute_action(
+                {"action": "extract", "record": {"제목": title_el.idx, "가격": price_el.idx}},
+                elements, page, records,
+            )
+            assert "추출" in outcome, f"추출 outcome 형식 불일치: {outcome}"
+            assert records == [{"제목": "노트북 A", "가격": "100000"}], f"레코드 불일치: {records}"
+        finally:
+            browser.close()
+
+    print("test_execute_extract_appends_record 통과")
+
+
+def test_clamp_wait_seconds() -> None:
+    from core.web_collector import _clamp_wait_seconds
+
+    assert _clamp_wait_seconds(10) == 3.0, "상한(3.0)으로 clamp 안 됨"
+    assert _clamp_wait_seconds(0.05) == 0.2, "하한(0.2)으로 clamp 안 됨"
+    assert _clamp_wait_seconds(1.5) == 1.5, "범위 안 값이 그대로 유지 안 됨"
+
+    print("test_clamp_wait_seconds 통과")
+
+
 def main() -> None:
     test_collect_elements()
-    print("\ntest_web_collector_engine (Task 1) 검증 통과")
+    test_execute_click_and_type()
+    test_execute_click_blocks_irreversible_action()
+    test_execute_extract_appends_record()
+    test_clamp_wait_seconds()
+    print("\ntest_web_collector_engine (Task 1-2) 검증 통과")
 
 
 if __name__ == "__main__":

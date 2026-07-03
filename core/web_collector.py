@@ -115,3 +115,90 @@ class WebCollectorEngine:
             logger.warning(f"요소 수집 실패: {e}")
             return []
         return [WebElement(**item) for item in raw]
+
+    # -- 행동 실행 (Claude가 아니라 이 코드가 직접 수행) --------------------
+
+    def _execute_action(
+        self,
+        action: dict,
+        elements: list[WebElement],
+        page,
+        records: list[dict],
+    ) -> str:
+        kind = action.get("action")
+        try:
+            if kind == "navigate":
+                url = str(action.get("url", "")).strip()
+                if not url:
+                    return "이동 실패: url 값 없음"
+                if not url.startswith("http"):
+                    url = "https://" + url
+                page.goto(url, timeout=15000, wait_until="domcontentloaded")
+                return f"이동: {url}"
+
+            if kind == "click":
+                idx = int(action.get("idx", -1))
+                el = self._find_element(elements, idx)
+                if el is None:
+                    return f"클릭 실패: 존재하지 않는 요소 번호 {idx}"
+                danger = _find_irreversible_keyword(el.text)
+                if danger:
+                    return (f"클릭 거부: '{el.text}'은(는) 되돌릴 수 없는 동작('{danger}')으로 "
+                             f"판단되어 실행하지 않았습니다.")
+                page.locator(f'[data-jarvis-idx="{idx}"]').first.click(timeout=5000)
+                return f"클릭: [{idx}] {el.text or el.tag}"
+
+            if kind == "type":
+                idx = int(action.get("idx", -1))
+                text = str(action.get("text", ""))
+                el = self._find_element(elements, idx)
+                if el is None:
+                    return f"입력 실패: 존재하지 않는 요소 번호 {idx}"
+                danger = _find_irreversible_keyword(el.text)
+                if danger:
+                    return (f"입력 거부: '{el.text}'은(는) 되돌릴 수 없는 동작('{danger}')으로 "
+                             f"판단되어 실행하지 않았습니다.")
+                page.locator(f'[data-jarvis-idx="{idx}"]').first.fill(text, timeout=5000)
+                return f"입력: [{idx}] {el.text or el.tag} <- '{text}'"
+
+            if kind == "extract":
+                record_spec = action.get("record")
+                if not isinstance(record_spec, dict) or not record_spec:
+                    return "추출 실패: record 값 없음"
+                record: dict[str, str] = {}
+                for field, idx_val in record_spec.items():
+                    el = self._find_element(elements, int(idx_val))
+                    record[str(field)] = el.text if el else ""
+                records.append(record)
+                return f"추출: {record}"
+
+            if kind == "scroll":
+                direction = str(action.get("direction", "down"))
+                delta = -800 if direction == "up" else 800
+                page.mouse.wheel(0, delta)
+                return f"스크롤: {direction}"
+
+            if kind == "wait":
+                seconds = _clamp_wait_seconds(action.get("seconds", 1))
+                time.sleep(seconds)
+                return f"대기: {seconds}초"
+
+            if kind in ("done", "fail"):
+                return str(action.get("message", ""))
+
+            return f"알 수 없는 행동: {kind}"
+        except Exception as e:
+            logger.error(f"행동 실행 오류({kind}): {e}")
+            return f"행동 실행 오류({kind}): {e}"
+
+    @staticmethod
+    def _find_element(elements: list[WebElement], idx: int) -> WebElement | None:
+        return next((el for el in elements if el.idx == idx), None)
+
+
+def _find_irreversible_keyword(text: str) -> str | None:
+    return next((kw for kw in _IRREVERSIBLE_ACTION_KEYWORDS if kw in text), None)
+
+
+def _clamp_wait_seconds(value) -> float:
+    return min(max(float(value), 0.2), _MAX_WAIT_SECONDS)

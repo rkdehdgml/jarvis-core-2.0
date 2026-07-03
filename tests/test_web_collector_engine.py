@@ -198,6 +198,34 @@ def test_parse_action_raises_on_missing_action_field() -> None:
     print("test_parse_action_raises_on_missing_action_field 통과")
 
 
+def test_storage_state_roundtrip() -> None:
+    import tempfile
+    from pathlib import Path
+    import core.web_collector as mod
+
+    original_path = mod._STORAGE_STATE_PATH
+    with tempfile.TemporaryDirectory() as tmp:
+        mod._STORAGE_STATE_PATH = Path(tmp) / "state.json"
+        try:
+            engine = WebCollectorEngine(headless=True)
+
+            assert engine._load_storage_state() is None, "파일 없을 때는 None을 반환해야 함"
+
+            class _FakeContext:
+                def storage_state(self):
+                    return {"cookies": [{"name": "sid", "value": "abc"}]}
+
+            engine._save_storage_state(_FakeContext())
+            assert mod._STORAGE_STATE_PATH.exists(), "저장 파일이 생성되지 않음"
+
+            loaded = engine._load_storage_state()
+            assert loaded == {"cookies": [{"name": "sid", "value": "abc"}]}, f"로드 값 불일치: {loaded}"
+        finally:
+            mod._STORAGE_STATE_PATH = original_path
+
+    print("test_storage_state_roundtrip 통과")
+
+
 def main() -> None:
     test_collect_elements()
     test_execute_click_and_type()
@@ -207,7 +235,8 @@ def main() -> None:
     test_build_decision_prompt_includes_task_and_elements()
     test_parse_action_extracts_json_from_markdown_fence()
     test_parse_action_raises_on_missing_action_field()
-    print("\ntest_web_collector_engine (Task 1-3) 검증 통과")
+    test_storage_state_roundtrip()
+    print("\ntest_web_collector_engine (Task 1-4) 검증 통과")
 
 
 if __name__ == "__main__":

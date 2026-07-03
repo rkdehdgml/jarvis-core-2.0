@@ -195,6 +195,24 @@ class WebCollectorEngine:
     def _find_element(elements: list[WebElement], idx: int) -> WebElement | None:
         return next((el for el in elements if el.idx == idx), None)
 
+    # -- 로그인 세션 --------------------------------------------------------
+
+    def _load_storage_state(self) -> dict | None:
+        if _STORAGE_STATE_PATH.exists():
+            try:
+                return json.loads(_STORAGE_STATE_PATH.read_text(encoding="utf-8"))
+            except Exception as e:
+                logger.warning(f"로그인 세션 로드 실패: {e}")
+        return None
+
+    def _save_storage_state(self, context) -> None:
+        try:
+            _STORAGE_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            state = context.storage_state()
+            _STORAGE_STATE_PATH.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+        except Exception as e:
+            logger.warning(f"로그인 세션 저장 실패: {e}")
+
 
 def _find_irreversible_keyword(text: str) -> str | None:
     return next((kw for kw in _IRREVERSIBLE_ACTION_KEYWORDS if kw in text), None)

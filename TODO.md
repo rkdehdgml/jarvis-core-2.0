@@ -1,7 +1,7 @@
 # jarvis-core 2.0 — 전체 작업 목록
 
 > 노트북/PC 작업 전환용 메모. 완료 시 삭제 예정.  
-> 마지막 업데이트: 2026-07-08 (우선순위 3 완료, 4-A·4-B 완료)
+> 마지막 업데이트: 2026-07-08 (우선순위 3 완료, 4-A·4-B·4-C 완료)
 
 ---
 
@@ -16,7 +16,7 @@ WhisperFlow에서 가져오기로 한 기능과 jarvis-core 2.0에 새로 추가
 | 3 | Claude Code 훅 | `jarvis_hook.sh` PostToolUse | `hooks/*.py` PostToolUse·Stop | ✅ 완료 |
 | 4 | 버그: 이미지 전달 | — | base64 → 파일 경로 방식 수정 | ✅ 완료 |
 | 5 | 가상 키보드 출력 | pbcopy + AppleScript → Claude 터미널 붙여넣기 | pyperclip + pyautogui Ctrl+V → 포커스 앱 입력 | ✅ 완료 |
-| 6 | Always-Listen 상태 머신 | BOOT_WAIT→IDLE→SPEECH→CONV_WAIT | main.py 루프 재설계 | ❌ 미구현 |
+| 6 | Always-Listen 상태 머신 | BOOT_WAIT→IDLE→SPEECH→CONV_WAIT | main.py 루프 재설계 (IDLE/CONVERSING 2단계로 범위 축소) | ✅ 완료 |
 | 7 | TTS 인터럽트 | 없음 (Mac 특성) | 박수 2번 → pygame.mixer 즉시 중단 | ✅ 완료 |
 | 8 | 스트리밍 TTS | STT→Claude 실시간 스트림 | run_task() 문장 버퍼링 → 즉시 TTS | ✅ 완료 |
 | 9 | 실행 중 CLI 세션 주입 | STT를 열린 터미널에 직접 타이핑 | claude --resume 세션 재연결 | ❌ 미구현 |
@@ -276,25 +276,23 @@ jarvis-core가 `claude -p` 서브프로세스 1회 호출 방식이라 인터랙
 
 ---
 
-#### 4-C. Always-Listen 상태 머신 개선
-WhisperFlow 방식: `BOOT_WAIT → IDLE → SPEECH → CONV_WAIT` 4단계.  
-현재 `main.py`는 단순 while 루프 + active 플래그. 상태 전환이 명시적이지 않음.
+#### 4-C. Always-Listen 상태 머신 개선 — ✅ 완료 (2026-07-08)
+설계: `docs/superpowers/specs/2026-07-08-listen-state-machine-design.md`
+계획: `docs/superpowers/plans/2026-07-08-listen-state-machine.md`
 
-```python
-# main.py 상태 머신 리팩토링
-from enum import Enum, auto
-
-class ListenState(Enum):
-    BOOT_WAIT  = auto()  # 시작 대기 (wakeword 또는 clap 감지 전)
-    IDLE       = auto()  # 웨이크워드 감지 후 명령 대기
-    SPEECH     = auto()  # STT 수신 중
-    CONV_WAIT  = auto()  # Claude 응답 중 (follow_up 대기)
-
-# 각 상태에서 broadcaster.emit()으로 UI에 현재 상태 전달
-# BOOT_WAIT → idle, IDLE → listening, SPEECH → processing, CONV_WAIT → streaming
-```
-
-**수정할 파일**: `main.py`
+WhisperFlow 원래 4단계(`BOOT_WAIT→IDLE→SPEECH→CONV_WAIT`) 중 `BOOT_WAIT`(모델
+로딩)와 `SPEECH`(VAD 발화 경계)는 각각 `wakeword.py`/`stt.py` 내부에 갇혀 있어
+`main.py`가 관찰할 수 없다고 판단해(둘 다 구현하려면 그 파일들을 건드려야 해서
+"main.py 루프 재설계"라는 이번 항목 범위를 넘음) `main.py`에서 실제로 관찰
+가능한 `IDLE`/`CONVERSING` 2단계 `ListenState` Enum으로 범위를 축소했다.
+`_transition()` 헬퍼로 상태 갱신과 broadcaster emit을 한 곳에 모아 기존에
+3곳에 흩어져 있던 `broadcaster.emit(state="idle")` 호출을 정리. 계획 자체
+리뷰 중 "IDLE→CONVERSING 전환 시에만 emit"으로 짰다가 멀티턴 대화(이미
+`CONVERSING`인 반복)에서 `"listening"` 이벤트가 빠지는 회귀를 발견해, 매 반복
+`stt.listen()` 직전 무조건 `_transition(state)`를 호출하도록 수정 — 동작은
+리팩토링 전후 동일함을 코드 트레이스로 확인. 자동 테스트(`tests/test_listen_state.py`,
+2개)는 `_transition()` 배선만 검증 — 실제 루프는 마이크/모델이 필요해 계획
+문서의 "수동 검증" 절에 남김.
 
 ---
 
@@ -419,7 +417,7 @@ print(f"SoM: {ann}")
 [중기] 우선순위 4 — WhisperFlow 기능 이식
   4-A  TTS 인터럽트 (박수 2번 → pygame stop) — ✅ 완료
   4-B  가상 키보드 출력 (virtual_keyboard.py + skill) — ✅ 완료
-  4-C  Always-Listen 상태 머신 리팩토링
+  4-C  Always-Listen 상태 머신 리팩토링 — ✅ 완료
   4-D  claude --resume 세션 유지
   4-E  오디오 레벨 시각화 (AudioWave.tsx)
        ↓
@@ -488,7 +486,7 @@ python -c "from core.engines.claude_cli_engine import ClaudeCliEngine; print(Cla
 | `voice/tts.py` | stop() 추가(4-A) — ✅ 완료 | 4 |
 | `voice/clap_detector.py` | wait_for_double_clap() 추가(4-A) — ✅ 완료 | 4 |
 | `voice/stt.py` | 레벨 emit 추가(4-E) | 4 |
-| `main.py` | TTS 인터럽트 배선(4-A) — ✅ 완료, 상태 머신(4-C) — 미착수 | 4 |
+| `main.py` | TTS 인터럽트 배선(4-A), ListenState 상태 머신(4-C) — 둘 다 ✅ 완료 | 4 |
 | `skills/skill_virtual_keyboard.py` | 신규 — 가상 키보드 스킬(4-B) — ✅ 완료 | 4 |
 | `skills/skill_screen_agent.py` | 트리거 확장(5-A) | 5 |
 | `data/groq_usage.json` | 정리(5-C) | 5 |

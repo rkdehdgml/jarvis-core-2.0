@@ -6,7 +6,13 @@ openWakeWord처럼 학습된 모델이 아니라 "클랩은 매우 짧고 강한
 임계값(_PEAK_THRESHOLD 등)은 마이크/환경마다 다를 수 있는 휴리스틱이라 실제 사용
 환경에서 오탐(시끄러운 환경)·누락(약한 박수)이 보이면 조정이 필요하다.
 """
+import queue
+import threading
+
 import numpy as np
+import sounddevice as sd
+
+from voice.stt import _get_input_device
 
 _PEAK_THRESHOLD = 0.35  # 클랩 한 번으로 보는 피크 진폭(절댓값, float32 -1~1 기준)
 _REFRACTORY_SECONDS = 0.25  # 같은 클랩의 잔향을 다음 클랩으로 잘못 세지 않기 위한 최소 간격
@@ -67,3 +73,46 @@ class ClapDetector:
         # 첫 박수가 너무 오래 전이면, 이번 온셋을 새 첫 박수로 다시 잡는다.
         self._first_onset = now
         return False
+
+
+def wait_for_double_clap(stop_event: threading.Event) -> bool:
+    """마이크에서 박수 2번이 감지될 때까지 블로킹한다.
+
+    wakeword.wait_for_activation()과 달리 웨이크워드 모델 추론이 없어
+    리샘플링이 필요 없다 — 네이티브 샘플레이트 프레임을 그대로 ClapDetector에
+    넘긴다. stop_event가 set되면(TTS가 정상 종료돼 더 들을 필요가 없어지면)
+    프레임을 더 기다리지 않고 즉시 False를 반환한다.
+
+    Returns:
+        박수 2번이 감지돼 반환하면 True, stop_event로 인해 중단되면 False.
+    """
+    device = _get_input_device()
+    if device is None:
+        return False
+
+    detector = ClapDetector()
+    native_rate = sd.query_devices(device)["default_samplerate"]
+    blocksize = round(0.08 * native_rate)  # 80ms 상당의 네이티브 레이트 프레임
+
+    frame_queue: queue.Queue[np.ndarray] = queue.Queue()
+
+    def _callback(indata, _frames, _time_info, _status) -> None:
+        frame_queue.put(indata[:, 0].copy())
+
+    with sd.InputStream(
+        device=device,
+        samplerate=native_rate,
+        channels=1,
+        dtype="float32",
+        blocksize=blocksize,
+        callback=_callback,
+    ):
+        while not stop_event.is_set():
+            try:
+                frame = frame_queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
+            if detector.process(frame, native_rate):
+                return True
+
+    return False

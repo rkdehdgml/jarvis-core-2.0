@@ -77,6 +77,7 @@ class ClaudeCliEngine:
     def __init__(self, timeout: int = _DEFAULT_TIMEOUT) -> None:
         self._timeout = timeout
         self._persona = self._load_persona()
+        self._task_session_id: str | None = None  # run_task()의 마지막 세션 (decide()와 별개)
 
     # ── 안전 모드: Q&A / 텍스트 생성 ─────────────────────────────────────────
 
@@ -169,6 +170,7 @@ class ClaudeCliEngine:
         self,
         task: str,
         on_chunk: Callable[[str], None] | None = None,
+        resume: bool = False,
     ) -> str:
         """--dangerously-skip-permissions으로 모든 툴을 해제하고 태스크를 실행한다.
 
@@ -179,19 +181,26 @@ class ClaudeCliEngine:
             task: 실행할 태스크 설명 (자연어).
             on_chunk: 스트리밍 텍스트 청크를 실시간으로 받을 콜백.
                       진행 상황을 TTS로 알리거나 UI에 표시할 때 사용.
+            resume: True이고 이전 run_task() 호출이 남긴 세션이 있으면
+                    --resume으로 이어간다. CLAUDE.md/시스템 프롬프트를 매번
+                    새로 로드하지 않아 후속 호출이 빨라진다. 저장된 세션이
+                    없으면(첫 호출 등) 조용히 새 세션으로 시작한다.
 
         Returns:
             최종 응답 텍스트. 스트리밍 완료 후 result 이벤트에서 추출.
         """
         prompt = self._build_prompt(task)
+        cmd = [
+            "claude", "-p", prompt,
+            "--dangerously-skip-permissions",
+            "--output-format", "stream-json",
+            "--verbose",  # CLI가 --output-format=stream-json에 필수로 요구
+        ]
+        if resume and self._task_session_id:
+            cmd += ["--resume", self._task_session_id]
         try:
             proc = subprocess.Popen(
-                [
-                    "claude", "-p", prompt,
-                    "--dangerously-skip-permissions",
-                    "--output-format", "stream-json",
-                    "--verbose",  # CLI가 --output-format=stream-json에 필수로 요구
-                ],
+                cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -244,6 +253,8 @@ class ClaudeCliEngine:
                     cost = obj.get("total_cost_usd")
                     if isinstance(cost, (int, float)):
                         usage.record_cost(cost)
+                    session_id = obj.get("session_id")
+                    self._task_session_id = session_id if isinstance(session_id, str) else None
                     final = str(obj.get("result", "")).strip()
                     if final:
                         return final

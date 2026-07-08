@@ -1,7 +1,7 @@
 # jarvis-core 2.0 — 전체 작업 목록
 
 > 노트북/PC 작업 전환용 메모. 완료 시 삭제 예정.  
-> 마지막 업데이트: 2026-07-01 (우선순위 2 완료)
+> 마지막 업데이트: 2026-07-08 (우선순위 3 완료, 4-A 완료)
 
 ---
 
@@ -17,7 +17,7 @@ WhisperFlow에서 가져오기로 한 기능과 jarvis-core 2.0에 새로 추가
 | 4 | 버그: 이미지 전달 | — | base64 → 파일 경로 방식 수정 | ✅ 완료 |
 | 5 | 가상 키보드 출력 | pbcopy + AppleScript → Claude 터미널 붙여넣기 | pyperclip + pyautogui Ctrl+V → 포커스 앱 입력 | ❌ 미구현 |
 | 6 | Always-Listen 상태 머신 | BOOT_WAIT→IDLE→SPEECH→CONV_WAIT | main.py 루프 재설계 | ❌ 미구현 |
-| 7 | TTS 인터럽트 | 없음 (Mac 특성) | 박수 2번 → pygame.mixer 즉시 중단 | ❌ 미구현 |
+| 7 | TTS 인터럽트 | 없음 (Mac 특성) | 박수 2번 → pygame.mixer 즉시 중단 | ✅ 완료 |
 | 8 | 스트리밍 TTS | STT→Claude 실시간 스트림 | run_task() 문장 버퍼링 → 즉시 TTS | ✅ 완료 |
 | 9 | 실행 중 CLI 세션 주입 | STT를 열린 터미널에 직접 타이핑 | claude --resume 세션 재연결 | ❌ 미구현 |
 | 10 | 오디오 레벨 시각화 | 마이크 레벨 파형 UI 표시 | 웹 대시보드 AudioWave 컴포넌트 | ❌ 미구현 |
@@ -241,42 +241,19 @@ case "tool_action":
 
 ### 🔵 우선순위 4 — WhisperFlow 핵심 기능 이식
 
-#### 4-A. TTS 인터럽트 — 박수 2번 → TTS 즉시 중단
-WhisperFlow의 인터럽트 메커니즘. `ClapDetector`는 이미 존재.
+#### 4-A. TTS 인터럽트 — 박수 2번 → TTS 즉시 중단 — ✅ 완료 (2026-07-08)
+설계: `docs/superpowers/specs/2026-07-08-tts-clap-interrupt-design.md`
+계획: `docs/superpowers/plans/2026-07-08-tts-clap-interrupt.md`
 
-```python
-# voice/tts.py 에 stop() 추가
-def stop() -> None:
-    """재생 중인 TTS를 즉시 중단한다."""
-    try:
-        if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
-            pygame.mixer.music.stop()
-    except Exception:
-        pass
-
-# main.py _run_voice_loop() 수정
-# TTS speak() 중에도 ClapDetector를 별도 스레드로 감시
-import threading
-from voice.clap_detector import ClapDetector
-from voice import tts
-
-def _tts_with_interrupt(text: str) -> None:
-    """TTS 재생 중 박수 2번 감지 시 즉시 중단."""
-    detector = ClapDetector()
-    stop_event = threading.Event()
-
-    def _watch():
-        if detector.wait_for_double_clap(timeout=30):
-            tts.stop()
-            stop_event.set()
-
-    t = threading.Thread(target=_watch, daemon=True)
-    t.start()
-    tts.speak(text)
-    stop_event.set()  # TTS 완료 시 감시 스레드 종료
-```
-
-**수정할 파일**: `voice/tts.py`, `main.py`
+`voice/tts.py`에 `stop()`, `voice/clap_detector.py`에 자체 마이크 스트림으로
+박수 2번만 감지하는 `wait_for_double_clap(stop_event)`를 추가하고, `main.py`에
+`_speak_with_clap_interrupt()`를 두어 `_run_voice_loop()`의 스킬 응답 TTS 호출을
+교체했다. `voice.clap_detector`가 `voice.stt`(무거운 STT 스택)를 import하므로
+`main.py`에서는 반드시 함수 본문 안에서 지연 import해야 한다는 점을 계획 자체
+리뷰 단계에서 발견해 수정 — 안 그러면 `--text` 모드까지 매번 STT 스택을 로딩하게
+돼 기존 지연 로딩 설계가 깨졌을 것. 자동 테스트(`tests/test_tts_interrupt.py`,
+7개)는 전부 모킹 기반이라 실 하드웨어(마이크로 스피커 소리가 오탐되는지 등)
+검증은 별도 수동 확인이 필요 — 계획 문서의 "수동 검증" 절 참고.
 
 ---
 
@@ -469,7 +446,7 @@ print(f"SoM: {ann}")
   3-D  프론트엔드 실시간 진행 표시
        ↓
 [중기] 우선순위 4 — WhisperFlow 기능 이식
-  4-A  TTS 인터럽트 (박수 2번 → pygame stop)
+  4-A  TTS 인터럽트 (박수 2번 → pygame stop) — ✅ 완료
   4-B  가상 키보드 출력 (virtual_keyboard.py + skill)
   4-C  Always-Listen 상태 머신 리팩토링
   4-D  claude --resume 세션 유지

@@ -11,6 +11,7 @@ import types
 
 import numpy as np
 
+import main as jarvis_main
 import voice.clap_detector as clap_detector
 import voice.tts as tts
 
@@ -144,6 +145,62 @@ def test_wait_for_double_clap_returns_false_when_stop_event_preset() -> None:
     assert detected is False, "stop_event가 이미 set이면 프레임과 무관하게 False를 반환해야 함"
 
 
+def test_speak_with_clap_interrupt_stops_tts_on_clap() -> None:
+    """wait_for_double_clap이 True를 반환하면 tts.stop()이 호출돼야 한다."""
+    calls = []
+    original_speak = tts.speak
+    original_stop = tts.stop
+    original_wait = clap_detector.wait_for_double_clap
+
+    def fake_speak(text: str) -> None:
+        calls.append(("speak", text))
+
+    def fake_stop() -> None:
+        calls.append(("stop",))
+
+    def fake_wait(stop_event: threading.Event) -> bool:
+        return True  # 즉시 "박수 감지됨"으로 응답
+
+    tts.speak = fake_speak
+    tts.stop = fake_stop
+    clap_detector.wait_for_double_clap = fake_wait
+    try:
+        jarvis_main._speak_with_clap_interrupt("테스트 문장")
+    finally:
+        tts.speak = original_speak
+        tts.stop = original_stop
+        clap_detector.wait_for_double_clap = original_wait
+
+    assert ("speak", "테스트 문장") in calls, "speak()가 호출돼야 함"
+    assert ("stop",) in calls, "wait_for_double_clap이 True면 stop()이 호출돼야 함"
+
+
+def test_speak_with_clap_interrupt_joins_watcher_thread() -> None:
+    """speak()가 정상 종료되면 워처 스레드가 join되어(살아있지 않아야) 한다."""
+    original_speak = tts.speak
+    original_wait = clap_detector.wait_for_double_clap
+
+    def fake_speak(_text: str) -> None:
+        pass
+
+    def fake_wait(stop_event: threading.Event) -> bool:
+        stop_event.wait(2.0)  # 메인이 stop_event.set()할 때까지 대기하는 실제 워처처럼 동작
+        return False
+
+    tts.speak = fake_speak
+    clap_detector.wait_for_double_clap = fake_wait
+    try:
+        jarvis_main._speak_with_clap_interrupt("다른 문장")
+    finally:
+        tts.speak = original_speak
+        clap_detector.wait_for_double_clap = original_wait
+
+    active_names = [t.name for t in threading.enumerate()]
+    assert "_speak_with_clap_interrupt-watcher" not in active_names, (
+        "speak() 종료 후 워처 스레드가 정리되지 않고 남아있음"
+    )
+
+
 def main() -> None:
     tests = [
         test_stop_calls_pygame_stop_when_busy,
@@ -151,6 +208,8 @@ def main() -> None:
         test_stop_is_noop_when_mixer_not_initialized,
         test_wait_for_double_clap_detects_two_spikes,
         test_wait_for_double_clap_returns_false_when_stop_event_preset,
+        test_speak_with_clap_interrupt_stops_tts_on_clap,
+        test_speak_with_clap_interrupt_joins_watcher_thread,
     ]
     for test in tests:
         test()

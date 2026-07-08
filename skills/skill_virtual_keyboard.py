@@ -59,4 +59,35 @@ class VirtualKeyboardSkill(Skill):
         return 0.0
 
     def execute(self, text: str, context: dict) -> SkillResult:
-        raise NotImplementedError  # Task 2에서 구현
+        try:
+            import pyautogui  # noqa: F401 (설치 확인용)
+            import pyperclip  # noqa: F401
+        except ImportError:
+            return SkillResult(
+                speech="가상 키보드 기능을 사용할 수 없습니다 (pyautogui/pyperclip 미설치).",
+                success=False,
+            )
+
+        to_type = _extract_text_to_type(text, context)
+        if not to_type:
+            return SkillResult(speech="입력할 내용이 없습니다.", success=False)
+
+        try:
+            _type_text(to_type, press_enter=("엔터" in text))
+        except Exception:
+            return SkillResult(speech="입력에 실패했습니다.", success=False)
+
+        return SkillResult(speech="입력했습니다", success=True, data={"text": to_type})
+
+
+def _type_text(text: str, press_enter: bool) -> None:
+    """text를 클립보드에 복사한 뒤 Ctrl+V로 현재 포커스된 창에 붙여넣는다."""
+    import pyautogui
+    import pyperclip
+
+    pyperclip.copy(text)
+    time.sleep(0.05)
+    pyautogui.hotkey("ctrl", "v")
+    if press_enter:
+        time.sleep(0.05)
+        pyautogui.press("enter")

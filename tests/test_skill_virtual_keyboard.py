@@ -5,6 +5,10 @@ _type_text()는 pyautogui/pyperclip을 모킹해 호출 배선만 검증한다.
 
 실행: python -m tests.test_skill_virtual_keyboard (프로젝트 루트에서)
 """
+import pyautogui
+import pyperclip
+
+import skills.skill_virtual_keyboard as skill_module
 from core.context import Turn
 from skills.skill_virtual_keyboard import VirtualKeyboardSkill, _extract_text_to_type
 
@@ -53,6 +57,85 @@ def test_can_handle_scores_trigger_words() -> None:
     assert skill.can_handle("", "오늘 날씨 알려줘") == 0.0
 
 
+def test_type_text_pastes_via_clipboard_without_enter() -> None:
+    calls = []
+    original_copy = pyperclip.copy
+    original_hotkey = pyautogui.hotkey
+    original_press = pyautogui.press
+
+    pyperclip.copy = lambda text: calls.append(("copy", text))
+    pyautogui.hotkey = lambda *keys: calls.append(("hotkey", keys))
+    pyautogui.press = lambda key: calls.append(("press", key))
+    try:
+        skill_module._type_text("안녕하세요", press_enter=False)
+    finally:
+        pyperclip.copy = original_copy
+        pyautogui.hotkey = original_hotkey
+        pyautogui.press = original_press
+
+    assert ("copy", "안녕하세요") in calls, "클립보드에 복사해야 함"
+    assert ("hotkey", ("ctrl", "v")) in calls, "Ctrl+V로 붙여넣어야 함"
+    assert not any(c[0] == "press" for c in calls), "press_enter=False면 Enter를 누르면 안 됨"
+
+
+def test_type_text_presses_enter_when_requested() -> None:
+    calls = []
+    original_copy = pyperclip.copy
+    original_hotkey = pyautogui.hotkey
+    original_press = pyautogui.press
+
+    pyperclip.copy = lambda text: calls.append(("copy", text))
+    pyautogui.hotkey = lambda *keys: calls.append(("hotkey", keys))
+    pyautogui.press = lambda key: calls.append(("press", key))
+    try:
+        skill_module._type_text("안녕하세요", press_enter=True)
+    finally:
+        pyperclip.copy = original_copy
+        pyautogui.hotkey = original_hotkey
+        pyautogui.press = original_press
+
+    assert ("press", "enter") in calls, "press_enter=True면 Enter를 눌러야 함"
+
+
+def test_execute_returns_failure_when_nothing_to_type() -> None:
+    skill = VirtualKeyboardSkill()
+    result = skill.execute("입력해줘", {"history": [], "data": {}})
+    assert result.success is False
+    assert result.speech == "입력할 내용이 없습니다."
+
+
+def test_execute_types_and_reports_success() -> None:
+    calls = []
+    original_type_text = skill_module._type_text
+    skill_module._type_text = lambda text, press_enter: calls.append((text, press_enter))
+    try:
+        skill = VirtualKeyboardSkill()
+        result = skill.execute("안녕하세요라고 입력해줘", {"history": [], "data": {}})
+    finally:
+        skill_module._type_text = original_type_text
+
+    assert result.success is True
+    assert result.speech == "입력했습니다"
+    assert calls == [("안녕하세요", False)]
+
+
+def test_execute_presses_enter_when_text_contains_enter_keyword() -> None:
+    """'라고 입력하고 엔터 쳐줘'처럼 자연스러운 조사 변형에서도 텍스트 추출과
+    엔터 감지가 둘 다 정확해야 한다 (Task 1의 '라고' 매칭 수정과 맞물린 케이스)."""
+    calls = []
+    original_type_text = skill_module._type_text
+    skill_module._type_text = lambda text, press_enter: calls.append((text, press_enter))
+    try:
+        skill = VirtualKeyboardSkill()
+        skill.execute("안녕하세요라고 입력하고 엔터 쳐줘", {"history": [], "data": {}})
+    finally:
+        skill_module._type_text = original_type_text
+
+    assert calls == [("안녕하세요", True)], (
+        f"텍스트는 '안녕하세요', press_enter는 True로 넘겨야 함, got {calls!r}"
+    )
+
+
 def main() -> None:
     tests = [
         test_extract_uses_rago_quotation_pattern,
@@ -61,6 +144,11 @@ def main() -> None:
         test_extract_falls_back_to_last_jarvis_response,
         test_extract_returns_none_when_nothing_available,
         test_can_handle_scores_trigger_words,
+        test_type_text_pastes_via_clipboard_without_enter,
+        test_type_text_presses_enter_when_requested,
+        test_execute_returns_failure_when_nothing_to_type,
+        test_execute_types_and_reports_success,
+        test_execute_presses_enter_when_text_contains_enter_keyword,
     ]
     for test in tests:
         test()

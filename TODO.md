@@ -1,7 +1,7 @@
 # jarvis-core 2.0 — 전체 작업 목록
 
 > 노트북/PC 작업 전환용 메모. 완료 시 삭제 예정.  
-> 마지막 업데이트: 2026-07-08 (우선순위 3 완료, 4-A·4-B·4-C 완료)
+> 마지막 업데이트: 2026-07-08 (우선순위 3 완료, 4-A·4-B·4-C·4-D 완료)
 
 ---
 
@@ -19,13 +19,13 @@ WhisperFlow에서 가져오기로 한 기능과 jarvis-core 2.0에 새로 추가
 | 6 | Always-Listen 상태 머신 | BOOT_WAIT→IDLE→SPEECH→CONV_WAIT | main.py 루프 재설계 (IDLE/CONVERSING 2단계로 범위 축소) | ✅ 완료 |
 | 7 | TTS 인터럽트 | 없음 (Mac 특성) | 박수 2번 → pygame.mixer 즉시 중단 | ✅ 완료 |
 | 8 | 스트리밍 TTS | STT→Claude 실시간 스트림 | run_task() 문장 버퍼링 → 즉시 TTS | ✅ 완료 |
-| 9 | 실행 중 CLI 세션 주입 | STT를 열린 터미널에 직접 타이핑 | claude --resume 세션 재연결 | ❌ 미구현 |
+| 9 | 실행 중 CLI 세션 주입 | STT를 열린 터미널에 직접 타이핑 | claude --resume 세션 재연결 (엔진 능력만, skill_agent.py 자동 연동은 범위 밖) | ✅ 완료 |
 | 10 | 오디오 레벨 시각화 | 마이크 레벨 파형 UI 표시 | 웹 대시보드 AudioWave 컴포넌트 | ❌ 미구현 |
 | 11 | UI 실시간 진행 표시 | Claude 응답 스트리밍 실시간 출력 | streaming 상태 + tool_action 이벤트 | ✅ 완료 |
 | 12 | skill_virtual_keyboard | 없음 | "이 내용 입력해줘" → 포커스 앱 타이핑 스킬 | ✅ 완료 |
 | 13 | 실 동작 테스트 | — | uiautomation·Claude CLI·훅 연결 검증 | ❌ 미완료 |
 | 14 | UIA 깊이·요소수 튜닝 | — | 실 앱 테스트 후 _MAX_ELEMENTS 조정 | ❌ 미완료 |
-| 15 | claude --resume 세션 유지 | 없음 (단발 -p) | 장시간 작업 세션 연속성 | ❌ 미구현 |
+| 15 | claude --resume 세션 유지 | 없음 (단발 -p) | 장시간 작업 세션 연속성 | ✅ 완료 |
 | 16 | 트리거 자연어 확장 | — | "열어서~", "들어가서~" 패턴 추가 | ❌ 미구현 |
 | 17 | groq_usage.json 정리 | — | 삭제 또는 claude_usage.json으로 교체 | ❌ 미완료 |
 
@@ -296,28 +296,21 @@ WhisperFlow 원래 4단계(`BOOT_WAIT→IDLE→SPEECH→CONV_WAIT`) 중 `BOOT_WA
 
 ---
 
-#### 4-D. 실행 중인 Claude CLI 세션 재연결 (`--resume`)
-단발 `-p` 호출 대신 이전 세션을 이어가는 방식.  
-장시간 화면 제어 작업에서 컨텍스트 유지에 유리.
+#### 4-D. 실행 중인 Claude CLI 세션 재연결 (`--resume`) — ✅ 완료 (2026-07-08)
+설계: `docs/superpowers/specs/2026-07-08-run-task-resume-design.md`
+계획: `docs/superpowers/plans/2026-07-08-run-task-resume.md`
 
-```python
-# core/engines/claude_cli_engine.py 에 session_id 관리 추가
-class ClaudeCliEngine:
-    def __init__(self, ...):
-        self._session_id: str | None = None   # 마지막 세션 ID 저장
-
-    def run_task(self, task, on_chunk=None, resume=False):
-        cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions",
-               "--output-format", "stream-json"]
-        if resume and self._session_id:
-            cmd += ["--resume", self._session_id]
-        ...
-        # result 이벤트에서 session_id 추출
-        elif event_type == "result":
-            self._session_id = obj.get("session_id")  # 다음 호출에서 재사용
-```
-
-**수정할 파일**: `core/engines/claude_cli_engine.py`
+`decide()`(화면 제어)는 이미 session_id를 주고받는 무상태 패턴이 검증돼 있었고,
+`run_task()`("풀파워 모드")에는 없어서 이번에 추가했다. `self._task_session_id`로
+엔진이 마지막 세션을 스스로 기억하고(`decide()`가 쓰는 세션과는 분리),
+`resume=True`이고 저장된 세션이 있을 때만 `--resume`을 붙인다(`resume` 기본값
+`False`라 기존 호출자는 동작 100% 그대로). `run_task()`의 유일한 호출자인
+`skill_agent.py`에 "팔로우업(이어서 하는 질문)"을 감지해 자동으로 `resume=True`를
+넘기는 로직은 넣지 않았다 — 오탐 시 서로 무관한 조사 작업이 뒤섞일 위험이 있는
+별도 설계 결정이라 이번 항목(엔진 능력 추가) 범위 밖으로 판단했다(TODO.md 원
+설계도 수정 파일을 `claude_cli_engine.py` 하나로만 명시). 자동 테스트
+(`tests/test_claude_cli_engine_resume.py`, 3개)는 `subprocess.Popen`을 모킹해
+명령 구성과 session_id 저장/재사용 배선만 검증.
 
 ---
 
@@ -418,7 +411,7 @@ print(f"SoM: {ann}")
   4-A  TTS 인터럽트 (박수 2번 → pygame stop) — ✅ 완료
   4-B  가상 키보드 출력 (virtual_keyboard.py + skill) — ✅ 완료
   4-C  Always-Listen 상태 머신 리팩토링 — ✅ 완료
-  4-D  claude --resume 세션 유지
+  4-D  claude --resume 세션 유지 — ✅ 완료
   4-E  오디오 레벨 시각화 (AudioWave.tsx)
        ↓
 [마무리] 우선순위 5 — 정리

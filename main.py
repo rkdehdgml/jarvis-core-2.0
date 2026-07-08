@@ -108,6 +108,36 @@ def _run_text_loop(router: Router, dispatcher: Dispatcher, context: Conversation
         print(result.speech)
 
 
+def _speak_with_clap_interrupt(text: str) -> None:
+    """TTS 재생 중 박수 2번을 감지하면 즉시 중단한다.
+
+    speak()가 정상 종료하든 중단되든, finally에서 stop_event를 set하고
+    워처 스레드를 join해 마이크 스트림을 반드시 정리한다 — 다음 stt.listen()이
+    새 입력 스트림을 열기 전에 겹치지 않도록 하기 위함.
+
+    voice.tts/voice.clap_detector는 voice.stt(무거운 STT 스택)를 끌어오므로
+    _run_voice_loop()와 마찬가지로 여기서 지연 import한다.
+    """
+    from voice import tts
+    from voice.clap_detector import wait_for_double_clap
+
+    stop_event = threading.Event()
+
+    def _watch() -> None:
+        if wait_for_double_clap(stop_event):
+            tts.stop()
+
+    watcher = threading.Thread(
+        target=_watch, name="_speak_with_clap_interrupt-watcher", daemon=True
+    )
+    watcher.start()
+    try:
+        tts.speak(text)
+    finally:
+        stop_event.set()
+        watcher.join()
+
+
 def _run_voice_loop(router: Router, dispatcher: Dispatcher, context: ConversationContext) -> None:
     # 모델 로딩이 무거워 음성 모드를 실제로 쓸 때만 import한다.
     from voice import stt, tts, wakeword
@@ -152,7 +182,7 @@ def _run_voice_loop(router: Router, dispatcher: Dispatcher, context: Conversatio
             skill = router.route(event.text)
             result = dispatcher.dispatch(skill, event.text, context, channel=event.channel)
 
-            tts.speak(result.speech)
+            _speak_with_clap_interrupt(result.speech)
             if context.get("sleep_requested"):
                 context.set("sleep_requested", False)
                 active = False

@@ -26,6 +26,20 @@ def speak(text: str) -> None:
         logger.error(f"TTS 재생 오류: {e}")
 
 
+def stop() -> None:
+    """재생 중인 TTS를 즉시 중단한다.
+
+    다른 스레드(클랩 감지 워처)에서 호출되는 것을 전제로 한다 — pygame.mixer.music의
+    재생 제어 함수는 스레드 세이프하다. speak()의 재생 루프(_play())는 이 호출 이후
+    다음 폴링에서 get_busy()가 False가 된 것을 보고 자연스럽게 빠져나온다.
+    """
+    try:
+        if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
+            pygame.mixer.music.stop()
+    except Exception:
+        pass
+
+
 async def _speak_async(text: str) -> None:
     with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
         path = Path(f.name)

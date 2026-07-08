@@ -1,7 +1,7 @@
 # jarvis-core 2.0 — 전체 작업 목록
 
 > 노트북/PC 작업 전환용 메모. 완료 시 삭제 예정.  
-> 마지막 업데이트: 2026-07-08 (우선순위 3 완료, 4-A 완료)
+> 마지막 업데이트: 2026-07-08 (우선순위 3 완료, 4-A·4-B 완료)
 
 ---
 
@@ -15,14 +15,14 @@ WhisperFlow에서 가져오기로 한 기능과 jarvis-core 2.0에 새로 추가
 | 2 | 화면 인식·제어 | computer_use Vision 단독 | UIA 트리 + Vision 하이브리드 (전략 A) | ✅ 완료 |
 | 3 | Claude Code 훅 | `jarvis_hook.sh` PostToolUse | `hooks/*.py` PostToolUse·Stop | ✅ 완료 |
 | 4 | 버그: 이미지 전달 | — | base64 → 파일 경로 방식 수정 | ✅ 완료 |
-| 5 | 가상 키보드 출력 | pbcopy + AppleScript → Claude 터미널 붙여넣기 | pyperclip + pyautogui Ctrl+V → 포커스 앱 입력 | ❌ 미구현 |
+| 5 | 가상 키보드 출력 | pbcopy + AppleScript → Claude 터미널 붙여넣기 | pyperclip + pyautogui Ctrl+V → 포커스 앱 입력 | ✅ 완료 |
 | 6 | Always-Listen 상태 머신 | BOOT_WAIT→IDLE→SPEECH→CONV_WAIT | main.py 루프 재설계 | ❌ 미구현 |
 | 7 | TTS 인터럽트 | 없음 (Mac 특성) | 박수 2번 → pygame.mixer 즉시 중단 | ✅ 완료 |
 | 8 | 스트리밍 TTS | STT→Claude 실시간 스트림 | run_task() 문장 버퍼링 → 즉시 TTS | ✅ 완료 |
 | 9 | 실행 중 CLI 세션 주입 | STT를 열린 터미널에 직접 타이핑 | claude --resume 세션 재연결 | ❌ 미구현 |
 | 10 | 오디오 레벨 시각화 | 마이크 레벨 파형 UI 표시 | 웹 대시보드 AudioWave 컴포넌트 | ❌ 미구현 |
 | 11 | UI 실시간 진행 표시 | Claude 응답 스트리밍 실시간 출력 | streaming 상태 + tool_action 이벤트 | ✅ 완료 |
-| 12 | skill_virtual_keyboard | 없음 | "이 내용 입력해줘" → 포커스 앱 타이핑 스킬 | ❌ 미구현 |
+| 12 | skill_virtual_keyboard | 없음 | "이 내용 입력해줘" → 포커스 앱 타이핑 스킬 | ✅ 완료 |
 | 13 | 실 동작 테스트 | — | uiautomation·Claude CLI·훅 연결 검증 | ❌ 미완료 |
 | 14 | UIA 깊이·요소수 튜닝 | — | 실 앱 테스트 후 _MAX_ELEMENTS 조정 | ❌ 미완료 |
 | 15 | claude --resume 세션 유지 | 없음 (단발 -p) | 장시간 작업 세션 연속성 | ❌ 미구현 |
@@ -257,51 +257,22 @@ case "tool_action":
 
 ---
 
-#### 4-B. 가상 키보드 출력 (WhisperFlow 핵심 기능 Windows 이식)
-WhisperFlow 원리: STT 결과 → `pbcopy` (클립보드) → AppleScript `Cmd+V + Enter` → Claude CLI 터미널에 입력.  
-Windows 대응: STT 결과 또는 자비스 응답 → `pyperclip.copy()` → `pyautogui.hotkey('ctrl','v')` → 현재 포커스 앱에 직접 타이핑.
+#### 4-B. 가상 키보드 출력 — ✅ 완료 (2026-07-08)
+설계: `docs/superpowers/specs/2026-07-08-virtual-keyboard-design.md`
+계획: `docs/superpowers/plans/2026-07-08-virtual-keyboard.md`
 
-**신규 파일**: `voice/virtual_keyboard.py`
-```python
-"""현재 포커스 앱에 텍스트를 클립보드→붙여넣기 방식으로 입력한다.
-WhisperFlow의 pbcopy + AppleScript 메커니즘을 Windows에서 구현.
-"""
-import time
-import pyperclip
-import pyautogui
-
-def type_text(text: str, press_enter: bool = False) -> None:
-    """포커스된 앱에 text를 붙여넣는다."""
-    pyperclip.copy(text)
-    time.sleep(0.05)
-    pyautogui.hotkey('ctrl', 'v')
-    if press_enter:
-        time.sleep(0.05)
-        pyautogui.press('enter')
-
-def inject_to_claude_terminal(text: str) -> None:
-    """실행 중인 Claude CLI 터미널에 텍스트를 입력한다.
-    터미널 창을 포커스한 뒤 붙여넣고 Enter를 누른다.
-    """
-    import pygetwindow as gw
-    # claude 터미널 창 찾기 (제목에 'claude' 포함)
-    wins = [w for w in gw.getAllWindows()
-            if 'claude' in w.title.lower() or 'powershell' in w.title.lower()]
-    if wins:
-        wins[0].activate()
-        time.sleep(0.1)
-    type_text(text, press_enter=True)
-```
-
-**신규 파일**: `skills/skill_virtual_keyboard.py`
-```python
-# "이 내용 입력해줘", "자비스 응답을 창에 입력해줘" 트리거
-# 직전 자비스 응답(context에서 읽기) 또는 발화 내 텍스트를 포커스 앱에 타이핑
-```
-
-**수정할 파일 (선택)**: `main.py` — 음성 응답 후 자동으로 Claude 터미널에 주입하는 모드 추가
-
-**필요 패키지**: `pyperclip` (이미 있음), `pyautogui` (이미 있음), `pygetwindow` (이미 있음)
+WhisperFlow 원래 설계의 "Claude CLI 터미널에 직접 주입"(`inject_to_claude_terminal`)은
+jarvis-core가 `claude -p` 서브프로세스 1회 호출 방식이라 인터랙티브 터미널 세션
+자체가 없어 이 아키텍처와 맞지 않는다고 판단해 제외했다 — 범용 "포커스된 창에
+타이핑" 기능만 구현. 별도 `voice/virtual_keyboard.py` 모듈 대신 `skill_window.py`/
+`skill_clipboard.py` 관례를 따라 `skills/skill_virtual_keyboard.py` 하나에 로직을
+담았다(`voice/`는 오디오 I/O 전용 경계). 타이핑할 텍스트는 ①"~라고 입력해줘"
+패턴 ②노이즈 단어 제거 후 남는 텍스트 ③직전 자비스 응답(`context["history"]`)
+순으로 결정한다. 계획 자체 리뷰 중 "라고 입력해"를 고정 문자열로 매칭하면
+"라고 입력하고 엔터 쳐줘"처럼 조사가 다른 자연스러운 문장을 놓치는 버그를
+발견해 "라고" 단독 매칭으로 수정. 자동 테스트(`tests/test_skill_virtual_keyboard.py`,
+11개)는 전부 모킹 기반이라 실제 클립보드/키 입력 동작은 계획 문서의 "수동 검증"
+절에 따라 별도 확인 필요.
 
 ---
 
@@ -447,7 +418,7 @@ print(f"SoM: {ann}")
        ↓
 [중기] 우선순위 4 — WhisperFlow 기능 이식
   4-A  TTS 인터럽트 (박수 2번 → pygame stop) — ✅ 완료
-  4-B  가상 키보드 출력 (virtual_keyboard.py + skill)
+  4-B  가상 키보드 출력 (virtual_keyboard.py + skill) — ✅ 완료
   4-C  Always-Listen 상태 머신 리팩토링
   4-D  claude --resume 세션 유지
   4-E  오디오 레벨 시각화 (AudioWave.tsx)
@@ -514,10 +485,10 @@ python -c "from core.engines.claude_cli_engine import ClaudeCliEngine; print(Cla
 | `ui/server.py` | 훅 이벤트 수신·브로드캐스트(3-C) | 3 |
 | `ui/web/hooks/useJarvisStatus.ts` | tool_action 처리(3-D) | 3 |
 | `ui/web/components/AudioWave.tsx` | 신규 — 오디오 파형(4-E) | 4 |
-| `voice/tts.py` | stop() 추가(4-A) | 4 |
-| `voice/virtual_keyboard.py` | 신규 — 가상 키보드(4-B) | 4 |
+| `voice/tts.py` | stop() 추가(4-A) — ✅ 완료 | 4 |
+| `voice/clap_detector.py` | wait_for_double_clap() 추가(4-A) — ✅ 완료 | 4 |
 | `voice/stt.py` | 레벨 emit 추가(4-E) | 4 |
-| `main.py` | 상태 머신(4-C), TTS 인터럽트(4-A) | 4 |
-| `skills/skill_virtual_keyboard.py` | 신규 — 가상 키보드 스킬(4-B) | 4 |
+| `main.py` | TTS 인터럽트 배선(4-A) — ✅ 완료, 상태 머신(4-C) — 미착수 | 4 |
+| `skills/skill_virtual_keyboard.py` | 신규 — 가상 키보드 스킬(4-B) — ✅ 완료 | 4 |
 | `skills/skill_screen_agent.py` | 트리거 확장(5-A) | 5 |
 | `data/groq_usage.json` | 정리(5-C) | 5 |

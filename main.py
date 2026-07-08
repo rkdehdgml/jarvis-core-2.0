@@ -10,6 +10,7 @@
 --no-web 플래그로 웹 서버 없이 실행할 수 있다.
 """
 import argparse
+from enum import Enum, auto
 import logging
 import sys
 import threading
@@ -34,6 +35,23 @@ _CLEAR_HISTORY_TARGETS = ("채팅", "대화", "기록", "목록")
 
 _WEB_HOST = "127.0.0.1"
 _WEB_PORT = 8765
+
+
+class ListenState(Enum):
+    """main.py가 실제로 관찰 가능한 음성 루프 상태만 다룬다.
+
+    WhisperFlow 원형의 BOOT_WAIT(모델 로딩)/SPEECH(VAD 발화 경계)는
+    각각 wakeword.py/stt.py 내부에 갇혀 있어 main.py 레벨에서 구분할 수
+    없다 — 이 두 파일을 건드리는 건 이번 리팩토링 범위 밖(설계 문서 참고).
+    """
+    IDLE = auto()        # 웨이크워드/박수 트리거 대기 중
+    CONVERSING = auto()  # 깨어난 뒤 명령을 듣고 처리하는 중, 재웨이크워드 불필요
+
+
+def _transition(state: ListenState) -> ListenState:
+    """상태를 기록하고 대응하는 broadcaster 이벤트를 emit한 뒤 그대로 반환한다."""
+    broadcaster.emit(state="idle" if state is ListenState.IDLE else "listening")
+    return state
 
 
 def _is_deactivate_command(text: str) -> bool:
@@ -146,17 +164,20 @@ def _run_voice_loop(router: Router, dispatcher: Dispatcher, context: Conversatio
         '자비스가 준비됐습니다. "자비스" 또는 박수 2번으로 음성인식을 켜고, '
         '"자비스 오프"/"자비스 종료"로 끌 수 있습니다. (Ctrl+C로 프로그램 종료)'
     )
-    broadcaster.emit(state="idle")
+    state = _transition(ListenState.IDLE)
 
-    active = False
     try:
         while True:
-            if not active:
+            if state is ListenState.IDLE:
                 trigger = wakeword.wait_for_activation()
                 logger.info(f"음성인식 활성화 (트리거: {trigger})")
-                active = True
+                state = ListenState.CONVERSING
 
-            broadcaster.emit(state="listening")
+            # 이 시점에서 state는 항상 CONVERSING이다 — 매 반복 stt.listen() 전에
+            # "listening"을 emit해야 하는 기존 동작(반복마다 무조건 emit)을
+            # 그대로 유지하기 위해 매번 호출한다. 방금 IDLE→CONVERSING으로
+            # 전환됐든, 이미 CONVERSING이던 반복이든 동일하게 emit된다.
+            state = _transition(state)
             text = stt.listen()
 
             if not text:
@@ -164,8 +185,7 @@ def _run_voice_loop(router: Router, dispatcher: Dispatcher, context: Conversatio
 
             if _is_deactivate_command(text):
                 tts.speak("음성인식을 종료합니다.")
-                active = False
-                broadcaster.emit(state="idle")
+                state = _transition(ListenState.IDLE)
                 continue
 
             if text == _EXIT_WORD:
@@ -185,8 +205,7 @@ def _run_voice_loop(router: Router, dispatcher: Dispatcher, context: Conversatio
             _speak_with_clap_interrupt(result.speech)
             if context.get("sleep_requested"):
                 context.set("sleep_requested", False)
-                active = False
-                broadcaster.emit(state="idle")
+                state = _transition(ListenState.IDLE)
                 continue
     except KeyboardInterrupt:
         print("\n자비스를 종료합니다.")

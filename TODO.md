@@ -1,7 +1,7 @@
 # jarvis-core 2.0 — 전체 작업 목록
 
 > 노트북/PC 작업 전환용 메모. 완료 시 삭제 예정.  
-> 마지막 업데이트: 2026-07-08 (우선순위 3 완료, 4-A·4-B·4-C·4-D 완료)
+> 마지막 업데이트: 2026-07-08 (우선순위 3 완료, 4-A·4-B·4-C·4-D·4-E 완료 — 우선순위 4 전체 완료)
 
 ---
 
@@ -20,7 +20,7 @@ WhisperFlow에서 가져오기로 한 기능과 jarvis-core 2.0에 새로 추가
 | 7 | TTS 인터럽트 | 없음 (Mac 특성) | 박수 2번 → pygame.mixer 즉시 중단 | ✅ 완료 |
 | 8 | 스트리밍 TTS | STT→Claude 실시간 스트림 | run_task() 문장 버퍼링 → 즉시 TTS | ✅ 완료 |
 | 9 | 실행 중 CLI 세션 주입 | STT를 열린 터미널에 직접 타이핑 | claude --resume 세션 재연결 (엔진 능력만, skill_agent.py 자동 연동은 범위 밖) | ✅ 완료 |
-| 10 | 오디오 레벨 시각화 | 마이크 레벨 파형 UI 표시 | 웹 대시보드 AudioWave 컴포넌트 | ❌ 미구현 |
+| 10 | 오디오 레벨 시각화 | 마이크 레벨 파형 UI 표시 | `ui/web/hooks/useMicLevels.ts`(브라우저 Web Audio API 직접 캡처) + `JarvisFull.tsx` 파형 — 최초 배포 때부터 이미 존재, TODO 미반영이었음 | ✅ 완료 (기존 구현 확인) |
 | 11 | UI 실시간 진행 표시 | Claude 응답 스트리밍 실시간 출력 | streaming 상태 + tool_action 이벤트 | ✅ 완료 |
 | 12 | skill_virtual_keyboard | 없음 | "이 내용 입력해줘" → 포커스 앱 타이핑 스킬 | ✅ 완료 |
 | 13 | 실 동작 테스트 | — | uiautomation·Claude CLI·훅 연결 검증 | ❌ 미완료 |
@@ -239,7 +239,7 @@ case "tool_action":
 
 ---
 
-### 🔵 우선순위 4 — WhisperFlow 핵심 기능 이식
+### 🔵 우선순위 4 — WhisperFlow 핵심 기능 이식 — ✅ 완료 (2026-07-08, 4-A~E 전체)
 
 #### 4-A. TTS 인터럽트 — 박수 2번 → TTS 즉시 중단 — ✅ 완료 (2026-07-08)
 설계: `docs/superpowers/specs/2026-07-08-tts-clap-interrupt-design.md`
@@ -314,30 +314,21 @@ WhisperFlow 원래 4단계(`BOOT_WAIT→IDLE→SPEECH→CONV_WAIT`) 중 `BOOT_WA
 
 ---
 
-#### 4-E. 실시간 오디오 레벨 시각화
-WhisperFlow UI처럼 마이크 입력 레벨을 실시간 파형으로 표시.
+#### 4-E. 실시간 오디오 레벨 시각화 — ✅ 완료 (기존 구현 확인, 2026-07-08)
 
-**흐름**:
-```
-voice/stt.py 오디오 콜백 → 레벨 계산(RMS) → broadcaster.emit(state="listening", extra={"level": rms})
-→ ui/server.py WS 브로드캐스트
-→ ui/web AudioWave.tsx 컴포넌트 실시간 렌더링
-```
-
-**신규 파일**: `ui/web/components/AudioWave.tsx`
-
-```typescript
-// 간단한 막대 파형 컴포넌트
-const AudioWave = ({ level }: { level: number }) => (
-  <div className="audio-wave">
-    {Array.from({ length: 12 }).map((_, i) => (
-      <span key={i} style={{ height: `${Math.random() * level * 100}%` }} />
-    ))}
-  </div>
-);
-```
-
-**수정할 파일**: `voice/stt.py` (레벨 emit 추가), `core/status_events.py` (extra 필드 활용), `ui/server.py`, `ui/web/`
+착수 전 코드베이스를 확인해보니 **이미 구현돼 있었다** — TODO.md가 반영을
+못 했을 뿐. 원래 스케치는 백엔드 경로(`voice/stt.py` RMS 계산 →
+`broadcaster.emit(extra={"level": ...})` → WS → `AudioWave.tsx`)였지만, 실제
+구현은 `ui/web/hooks/useMicLevels.ts`가 브라우저 `getUserMedia`/`AnalyserNode`
+(Web Audio API)로 마이크를 **직접** 캡처해 `requestAnimationFrame`으로
+갱신하는 클라이언트 전용 방식이다 — 백엔드 왕복이 전혀 없어 원래 설계보다
+단순하고 지연도 없다. `JarvisFull.tsx`가 `status.currentState === "listening"`
+일 때 이 훅을 24개 막대(`WAVE_BAR_COUNT`)로 렌더링(`jarvis-full__waveform`/
+`jarvis-full__wave-bar`, `JarvisFull.css`에 스타일 존재)하며, `git log`로 확인한
+결과 최초 배포 커밋(`7a8d499 최초배포`)부터 있던 코드다. `JarvisMinimal.tsx`엔
+없지만, 이름 그대로 의도적으로 축소된 뷰라 이번 확인 범위 밖으로 판단해
+손대지 않았다. `voice/stt.py`/`core/status_events.py`/`ui/server.py`는
+변경하지 않았다 — 변경할 이유가 없었다.
 
 ---
 
@@ -412,7 +403,7 @@ print(f"SoM: {ann}")
   4-B  가상 키보드 출력 (virtual_keyboard.py + skill) — ✅ 완료
   4-C  Always-Listen 상태 머신 리팩토링 — ✅ 완료
   4-D  claude --resume 세션 유지 — ✅ 완료
-  4-E  오디오 레벨 시각화 (AudioWave.tsx)
+  4-E  오디오 레벨 시각화 — ✅ 완료 (기존 구현 확인)
        ↓
 [마무리] 우선순위 5 — 정리
   5-A  트리거 자연어 확장
@@ -470,15 +461,14 @@ python -c "from core.engines.claude_cli_engine import ClaudeCliEngine; print(Cla
 
 | 파일 | 작업 | 우선순위 |
 |------|------|---------|
-| `core/engines/claude_cli_engine.py` | TTS 버퍼링(3-A), --resume(4-D) | 3, 4 |
+| `core/engines/claude_cli_engine.py` | TTS 버퍼링(3-A), --resume(4-D) — 둘 다 ✅ 완료 | 3, 4 |
 | `core/status_events.py` | streaming 상태 추가(3-B) | 3 |
 | `core/hybrid_screen.py` | UIA 파라미터 튜닝(5-B) | 5 |
 | `ui/server.py` | 훅 이벤트 수신·브로드캐스트(3-C) | 3 |
 | `ui/web/hooks/useJarvisStatus.ts` | tool_action 처리(3-D) | 3 |
-| `ui/web/components/AudioWave.tsx` | 신규 — 오디오 파형(4-E) | 4 |
+| `ui/web/hooks/useMicLevels.ts` | 오디오 파형(4-E) — 기존 구현이라 변경 없음, ✅ 완료 | 4 |
 | `voice/tts.py` | stop() 추가(4-A) — ✅ 완료 | 4 |
 | `voice/clap_detector.py` | wait_for_double_clap() 추가(4-A) — ✅ 완료 | 4 |
-| `voice/stt.py` | 레벨 emit 추가(4-E) | 4 |
 | `main.py` | TTS 인터럽트 배선(4-A), ListenState 상태 머신(4-C) — 둘 다 ✅ 완료 | 4 |
 | `skills/skill_virtual_keyboard.py` | 신규 — 가상 키보드 스킬(4-B) — ✅ 완료 | 4 |
 | `skills/skill_screen_agent.py` | 트리거 확장(5-A) | 5 |
